@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field, EmailStr
 
 from app.data import schemas
 
+from app.data.schemas import Theme, Difficulty
+
 # ---------- Common ----------
 
 class Role(str, Enum):
@@ -46,16 +48,6 @@ class Admin(Document):
 # ---------- Tasks / Catalog ----------
 
 
-class Difficulty(str, Enum):
-    easy = "лёгкий"
-    medium = "средний"
-    hard = "сложный"
-
-class Theme(str, Enum):
-    math = "математика"
-    russian = "русский"
-    informatic = "информатика"
-    physics = "физика"
 
 class Task(Document):
     subject: Indexed(str)

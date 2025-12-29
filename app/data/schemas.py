@@ -6,6 +6,21 @@ from typing import Any, Dict, List, Optional
 
 from beanie import Document, Indexed, Link
 from pydantic import BaseModel, Field, EmailStr
+#from app.data.models import Theme, Difficulty
+
+
+
+class Difficulty(str, Enum):
+    easy = "лёгкий"
+    medium = "средний"
+    hard = "сложный"
+
+class Theme(str, Enum):
+    math = "математика"
+    russian = "русский"
+    informatic = "информатика"
+    physics = "физика"
+
 
 
 # ---------- Common ----------
@@ -44,4 +59,13 @@ class UserLogIn(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class TaskSchema(BaseModel):
+    subject: Indexed(str)
+    theme: Theme 
+    difficulty: Difficulty 
+    title: str
+    task_text: str  
+    hint: str               
+    is_published: bool = True
 
