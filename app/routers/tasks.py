@@ -72,7 +72,7 @@ async def get_tasks():
 
 
 
-async def post_tasks(file: UploadFile) -> TaskSchema:
+async def post_tasks(file: UploadFile):
 
 
     #проверка на админа будет потом
@@ -82,27 +82,31 @@ async def post_tasks(file: UploadFile) -> TaskSchema:
         content = await file.read()
         
         json_file = json.loads(content.decode('utf-8'))
+        all_tasks_added = []
+        for task_field in json_file["tasks"]:
 
-        new_task = Task(
-        subject = json_file["subject"],
-        theme = json_file["theme"],
-        difficulty = json_file["difficulty"],
-        title = json_file["title"],
-        task_text = json_file["task_text"],  
-        hint = json_file["hint"],               
-        is_published = True
-        )
-        await new_task.create()
-        await new_task.save()
-        return TaskSchema(
-            subject = json_file["subject"],
-            theme = json_file["theme"],
-            difficulty = json_file["difficulty"],
-            title = json_file["title"],
-            task_text = json_file["task_text"],  
-            hint = json_file["hint"],               
+            new_task = Task(
+            subject = task_field["subject"],
+            theme = task_field["theme"],
+            difficulty = task_field["difficulty"],
+            title = task_field["title"],
+            task_text = task_field["task_text"],  
+            hint = task_field["hint"],               
             is_published = True
-        )
+            )
+            await new_task.create()
+            await new_task.save()
+            all_tasks_added.append(TaskSchema(
+                subject = task_field["subject"],
+                theme = task_field["theme"],
+                difficulty = task_field["difficulty"],
+                title = task_field["title"],
+                task_text = task_field["task_text"],  
+                hint = task_field["hint"],               
+                is_published = True
+            ))
+        return all_tasks_added
+        
     except:
         raise Error.FILE_READ_ERROR
         
