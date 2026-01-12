@@ -1,0 +1,50 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            if [ -d "$HOME/predprof-backend" ]; then
+              cd "$HOME/predprof-backend"
+            elif [ -d "/home/${{ secrets.SSH_USERNAME }}/predprof-backend" ]; then
+              cd "/home/${{ secrets.SSH_USERNAME }}/predprof-backend"
+            else
+              echo "Repository folder not found in common locations. Attempting to continue in HOME."
+              cd "$HOME" || true
+            fi
+
+            git fetch --all || true
+            git reset --hard origin/main || true
+            git pull origin main || true
+
+            if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+              DOCKER_COMPOSE_CMD="docker compose"
+            elif command -v docker-compose >/dev/null 2>&1; then
+              DOCKER_COMPOSE_CMD="docker-compose"
+            else
+              echo "No docker compose command found" >&2
+              exit 1
+            fi
+
+            $DOCKER_COMPOSE_CMD pull || true
+
+            $DOCKER_COMPOSE_CMD up -d --build
+
+            $DOCKER_COMPOSE_CMD restart || true
