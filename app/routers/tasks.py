@@ -1,5 +1,5 @@
 import json
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, UploadFile
 from app.data.schemas import TaskSchema
 from app.data.models import Task
 from app.utils.security import get_current_user
@@ -48,27 +48,65 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
     )
     
 
+@router.get(
+    '/',
+    description="get tasks",
+    responses={
 
-'''
+    }
+)
+async def get_tasks():
+    tasks = await Task.find_all().to_list()
+    return tasks
+
+
+
 
 @router.post(
-        '/upload/import',
-         description="import files from json and csv",
+        '/upload/import/json',
+         description="import files from json",
          responses={
              
          }
 )
-async def post_tasks():
+
+
+
+async def post_tasks(file: UploadFile) -> TaskSchema:
 
 
     #проверка на админа будет потом
 
-    
+    try:
 
-    return 200
-    
+        content = await file.read()
+        
+        json_file = json.loads(content.decode('utf-8'))
 
-'''
+        new_task = Task(
+        subject = json_file["subject"],
+        theme = json_file["theme"],
+        difficulty = json_file["difficulty"],
+        title = json_file["title"],
+        task_text = json_file["task_text"],  
+        hint = json_file["hint"],               
+        is_published = True
+        )
+        await new_task.create()
+        await new_task.save()
+        return TaskSchema(
+            subject = json_file["subject"],
+            theme = json_file["theme"],
+            difficulty = json_file["difficulty"],
+            title = json_file["title"],
+            task_text = json_file["task_text"],  
+            hint = json_file["hint"],               
+            is_published = True
+        )
+    except:
+        raise Error.FILE_READ_ERROR
+        
+
 
 
 @router.get('/export')
