@@ -22,6 +22,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     try:
         payload = jwt.decode(str(token), str(SECRET_KEY), algorithms=[ALGORITHM])
         username: str = payload.get("sub")
+        print(username)
         if username is None:
             raise Error.UNAUTHORIZED_INVALID
         token_data = TokenData(username=username)
@@ -31,22 +32,8 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     user = await User.find_one(User.email == token_data.username, fetch_links=True)
     if user is None:
         raise Error.UNAUTHORIZED_INVALID
-    
+    print(1)
     return user
 
-async def get_current_user_websocket(token: str):
-    try:
-        payload = jwt.decode(str(token), str(SECRET_KEY), algorithms=["HS256"])
-        username: str = payload.get("sub")
 
-        if username is None:
-            raise Error.UNAUTHORIZED_INVALID
-    except InvalidTokenError:
-        raise Error.UNAUTHORIZED_INVALID
-    
-    user = await User.find_one(User.email == username, fetch_links=True)
-    if user is None:
-        raise Error.UNAUTHORIZED_INVALID
-    
-    return user
         

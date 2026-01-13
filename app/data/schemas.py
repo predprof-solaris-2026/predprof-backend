@@ -42,6 +42,22 @@ class PvpSideState(BaseModel):
     last_submission_id: Optional[str] = None
 
 
+class PlayerSession(BaseModel):
+    """Represents a single player's session in a match."""
+    user_id: str
+    rating: int
+    answer: Optional[str] = None
+    submission_count: int = 0
+    counted_submission_id: Optional[str] = None
+    connected: bool = True
+
+
+class MatchSessionConfig(BaseModel):
+    """Configuration for a PvP match."""
+    match_timeout_seconds: int = 600  # 10 minutes
+    answer_change_allowed: bool = True  # Allow replacing previous answer
+
+
 class ThemeStat(BaseModel):
     attempts: int = 0
     correct: int = 0

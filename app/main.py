@@ -1,11 +1,11 @@
 from beanie import init_beanie, Document, UnionDoc
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import MONGO_DSN, ENVIRONMENT, projectConfig
-from app.routers import user, tasks
+from app.routers import user, tasks, pvp
 if ENVIRONMENT == "prod":
     app = FastAPI(
         title=projectConfig.__projname__,
@@ -21,9 +21,13 @@ else:
         description=projectConfig.__description__
     )
 
+api_router = APIRouter(prefix="/api")
 
-app.include_router(user.router)
-app.include_router(tasks.router)
+api_router.include_router(user.router)
+api_router.include_router(tasks.router)
+api_router.include_router(pvp.router)
+app.include_router(api_router)
+
 @app.on_event('startup')
 async def startup_event():
     client = AsyncIOMotorClient(MONGO_DSN)
