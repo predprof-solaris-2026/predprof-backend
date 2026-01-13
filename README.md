@@ -1,0 +1,1 @@
+[![Build and Deploy Backend](https://github.com/predprof-solaris-2026/predprof-backend/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/predprof-solaris-2026/predprof-backend/actions/workflows/deploy.yml)
