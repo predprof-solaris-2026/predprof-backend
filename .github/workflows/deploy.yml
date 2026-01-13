@@ -55,7 +55,7 @@ jobs:
             docker run -d \
               -p 8000:8000 \
               --name predprof-backend \
-              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              -e MONGO_DSN="${{ secrets.MONGO_DSN }}" \
               -e ADMIN_TOKEN="${{ secrets.ADMIN_TOKEN }}" \
               -e ALGORITHM="${{ secrets.ALGORITHM }}" \
               -e SECRET_KEY="${{ secrets.SECRET_KEY }}" \
