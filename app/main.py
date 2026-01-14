@@ -18,7 +18,8 @@ else:
     app = FastAPI(
         title=projectConfig.__projname__,
         version=projectConfig.__version__,
-        description=projectConfig.__description__
+        description=projectConfig.__description__,
+        docs_url='/api/docs'
     )
 
 api_router = APIRouter(prefix="/api")
