@@ -10,6 +10,16 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 
+
+
+
+# POST-requests
+
+
+
+
+
+
 @router.post(
         '/upload',
         description="making tasks (withowt admin check yet)",
@@ -21,8 +31,9 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
 
 
     #проверка на админа будет потом
-
-
+    task_exists = Task.find_one(Task.title == data.title)
+    if task_exists:
+        raise Error.TITLE_EXISTS
 
     new_task = Task(
         subject = data.subject,
@@ -47,19 +58,6 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
         is_published = True
     )
     
-
-@router.get(
-    '/',
-    description="get tasks",
-    responses={
-
-    }
-)
-async def get_tasks():
-    tasks = await Task.find_all().to_list()
-    return tasks
-
-
 
 
 @router.post(
@@ -94,6 +92,10 @@ async def post_tasks(file: UploadFile):
             hint = task_field["hint"],               
             is_published = True
             )
+            task = Task.find_one(Task.title == task_field["title"])
+            if task:
+                raise Error.TITLE_EXISTS
+
             await new_task.create()
             await new_task.save()
             all_tasks_added.append(TaskSchema(
@@ -113,7 +115,90 @@ async def post_tasks(file: UploadFile):
 
 
 
-@router.get('/export')
+
+
+
+
+# PATCH-requests
+
+
+
+
+
+
+
+
+@router.patch(
+        '/{title}',
+        description='edit task',
+        responses={
+
+        }
+)
+async def update_task(request: TaskSchema, title: str ):
+    task = await Task.find_one(Task.title == title)
+    task_exists = Task.find_one(Task.title == request.title)
+    if task_exists:
+        raise Error.TITLE_EXISTS
+    task.subject = request.subject
+    task.theme = request.theme
+    task.difficulty  = request.difficulty
+    task.title = request.title
+    task.task_text = request.task_text
+    task.hint =   request.hint
+    task.is_published = request.is_published
+
+    await task.save()
+    return task
+
+
+
+
+
+
+
+# GET-requests
+
+
+
+
+
+
+
+@router.get(
+    '/',
+    description="get all tasks",
+    responses={
+
+    }
+)
+async def get_tasks():
+    tasks = await Task.find_all().to_list()
+    return tasks
+
+
+
+
+@router.get(
+    '/{title}',
+    description="get definite task",
+    responses={
+
+    }
+)
+async def get_definite_task(title:str):
+    task = await Task.find_one(Task.title == title)
+    return task
+
+
+
+@router.get(
+        '/export',
+        description='export files into json',
+        responses={
+
+        }
+)
 async def get_tasks_to_json():
     task_data = await Task.find_all().to_list() 
 

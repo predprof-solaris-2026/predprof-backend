@@ -26,4 +26,7 @@ class Error(Exception):
         status_code=status.HTTP_400_BAD_REQUEST,
         detail="Cannot read the file."
     )
-    
+    TITLE_EXISTS = HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Task with this title already exists"
+    )
