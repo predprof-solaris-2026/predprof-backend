@@ -19,7 +19,8 @@ else:
         title=projectConfig.__projname__,
         version=projectConfig.__version__,
         description=projectConfig.__description__,
-        docs_url='/api/docs'
+        docs_url="/api/docs",
+        openapi_url="/api/v1/openapi.json"
     )
 
 api_router = APIRouter(prefix="/api")
