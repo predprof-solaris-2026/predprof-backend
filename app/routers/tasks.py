@@ -94,8 +94,8 @@ async def post_tasks(file: UploadFile):
             is_published = True
             )
             task = Task.find_one(Task.title == task_field["title"])
-            if task:
-                raise Error.TITLE_EXISTS
+            # if task:
+            #     raise Error.TITLE_EXISTS
 
             await new_task.create()
             await new_task.save()
@@ -110,7 +110,8 @@ async def post_tasks(file: UploadFile):
             ))
         return all_tasks_added
         
-    except:
+    except Exception as e:
+        print(e)
         raise Error.FILE_READ_ERROR
         
 
@@ -139,8 +140,8 @@ async def post_tasks(file: UploadFile):
 async def update_task(request: TaskSchema, title: str ):
     task = await Task.find_one(Task.title == title)
     task_exists = Task.find_one(Task.title == request.title)
-    if task_exists:
-        raise Error.TITLE_EXISTS
+    # if task_exists:
+    #     raise Error.TITLE_EXISTS
     task.subject = request.subject
     task.theme = request.theme
     task.difficulty  = request.difficulty
