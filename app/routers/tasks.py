@@ -32,8 +32,9 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
 
     #проверка на админа будет потом
     task_exists = Task.find_one(Task.title == data.title)
-    if task_exists:
-        raise Error.TITLE_EXISTS
+    # if task_exists:
+    #     raise Error.TITLE_EXISTS
+    # я пока убрал, сомнительно, тайтлы могут повторяться
 
     new_task = Task(
         subject = data.subject,
