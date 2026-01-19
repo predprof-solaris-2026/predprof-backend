@@ -77,7 +77,8 @@ class Token(BaseModel):
     token_type: str
 
 class TaskSchema(BaseModel):
-    subject: Indexed(str)
+    # subject: Indexed(str)
+    subject: str
     theme: Theme 
     difficulty: Difficulty 
     title: str

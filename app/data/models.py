@@ -50,7 +50,8 @@ class Admin(Document):
 
 
 class Task(Document):
-    subject: Indexed(str)
+    # subject: Indexed(str)
+    subject: str
     theme: Theme 
     difficulty: Difficulty 
     title: str
