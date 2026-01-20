@@ -1,5 +1,7 @@
 import json
-from fastapi import APIRouter, Depends, Response, UploadFile
+from fastapi import APIRouter, Depends, Response, UploadFile, HTTPException
+from pydantic import BaseModel
+from typing import Dict, Any
 from app.data.schemas import TaskSchema
 from app.data.models import Task
 from app.utils.security import get_current_user
@@ -134,14 +136,14 @@ async def post_tasks(file: UploadFile):
 
 
 @router.patch(
-        '/{title}',
-        description='edit task',
-        responses={
+    '/{task_id}',
+    description='edit task by id',
+    responses={
 
-        }
+    }
 )
-async def update_task(request: TaskSchema, title: str ):
-    task = await Task.find_one(Task.title == title)
+async def update_task(request: TaskSchema, task_id: str ):
+    task = await Task.get(task_id)
     task_exists = Task.find_one(Task.title == request.title)
     # if task_exists:
     #     raise Error.TITLE_EXISTS
@@ -180,21 +182,33 @@ async def update_task(request: TaskSchema, title: str ):
 )
 async def get_tasks():
     tasks = await Task.find_all().to_list()
-    return tasks
+    tasks_list = []
+    for t in tasks:
+        d: Dict[str, Any] = t.model_dump()
+        if 'answer' in d:
+            d.pop('answer')
+        tasks_list.append(d)
+    return tasks_list
 
 
 
 
 @router.get(
-    '/{title}',
-    description="get definite task",
+    '/{task_id}',
+    description="get definite task by id",
     responses={
 
     }
 )
-async def get_definite_task(title:str):
-    task = await Task.find_one(Task.title == title)
-    return task
+async def get_definite_task(task_id: str):
+    task = await Task.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    task_dict: Dict[str, Any] = task.model_dump()
+    # do not expose correct answer
+    if 'answer' in task_dict:
+        task_dict.pop('answer')
+    return task_dict
 
 
 
@@ -207,7 +221,6 @@ async def get_definite_task(title:str):
 )
 async def get_tasks_to_json():
     task_data = await Task.find_all().to_list() 
-
     task_dict = [task.model_dump() for task in task_data]
     export_tasks = {
         "tasks": task_dict 
@@ -219,4 +232,27 @@ async def get_tasks_to_json():
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=users.json"}
     )
+
+
+
+class CheckAnswer(BaseModel):
+    answer: str
+
+
+@router.post('/{task_id}/check', description='Check user answer for task')
+async def check_task(task_id: str, payload: CheckAnswer):
+    task = await Task.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    correct_answer = task.answer
+    user_answer = payload.answer
+    is_correct = False
+    # simple string comparison (case-insensitive, strip)
+    if correct_answer is not None:
+        is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
+
+    return {
+        "correct": is_correct,
+        "correct_answer": correct_answer
+    }
     
