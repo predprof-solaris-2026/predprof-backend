@@ -1,8 +1,8 @@
 import json
-from fastapi import APIRouter, Depends, Response, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, Response, UploadFile
 from pydantic import BaseModel
 from typing import Dict, Any
-from app.data.schemas import TaskSchema
+from app.data.schemas import TaskSchema, CheckAnswer
 from app.data.models import Task
 from app.utils.security import get_current_user
 from app.utils.exceptions import Error
@@ -98,9 +98,6 @@ async def post_tasks(file: UploadFile):
             answer = task_field.get("answer"),
             is_published = True
             )
-            task = Task.find_one(Task.title == task_field["title"])
-            # if task:
-            #     raise Error.TITLE_EXISTS
 
             await new_task.create()
             await new_task.save()
@@ -144,9 +141,7 @@ async def post_tasks(file: UploadFile):
 )
 async def update_task(request: TaskSchema, task_id: str ):
     task = await Task.get(task_id)
-    task_exists = Task.find_one(Task.title == request.title)
-    # if task_exists:
-    #     raise Error.TITLE_EXISTS
+    
     task.subject = request.subject
     task.theme = request.theme
     task.difficulty  = request.difficulty
@@ -203,7 +198,7 @@ async def get_tasks():
 async def get_definite_task(task_id: str):
     task = await Task.get(task_id)
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise Error.TASK_NOT_FOUND
     task_dict: Dict[str, Any] = task.model_dump()
     # do not expose correct answer
     if 'answer' in task_dict:
@@ -235,15 +230,14 @@ async def get_tasks_to_json():
 
 
 
-class CheckAnswer(BaseModel):
-    answer: str
+
 
 
 @router.post('/{task_id}/check', description='Check user answer for task')
 async def check_task(task_id: str, payload: CheckAnswer):
     task = await Task.get(task_id)
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise Error.TASK_NOT_FOUND
     correct_answer = task.answer
     user_answer = payload.answer
     is_correct = False

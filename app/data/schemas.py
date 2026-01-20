@@ -87,3 +87,5 @@ class TaskSchema(BaseModel):
     answer: Optional[str] = None
     is_published: bool = True
 
+class CheckAnswer(BaseModel):
+    answer: str

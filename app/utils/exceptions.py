@@ -30,3 +30,7 @@ class Error(Exception):
         status_code=status.HTTP_409_CONFLICT,
         detail="Task with this title already exists"
     )
+    TASK_NOT_FOUND = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Task not found"
+    )
