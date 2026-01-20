@@ -15,7 +15,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 
-# POST-requests
+# POST-ROUTES
 
 
 
@@ -23,11 +23,11 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 @router.post(
-        '/upload',
-        description="making tasks (withowt admin check yet)",
-        responses={
+    '/upload',
+    description="making tasks (withowt admin check yet)",
+    responses={
             
-        }
+    }
 )
 async def post_tasks(data: TaskSchema) -> TaskSchema:
 
@@ -66,11 +66,11 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
 
 
 @router.post(
-        '/upload/import/json',
-         description="import files from json",
-         responses={
+    '/upload/import/json',
+    description="import files from json",
+    responses={
              
-         }
+    }
 )
 
 
@@ -123,7 +123,7 @@ async def post_tasks(file: UploadFile):
 
 
 
-# PATCH-requests
+# PATCH-ROUTES
 
 
 
@@ -141,7 +141,7 @@ async def post_tasks(file: UploadFile):
 )
 async def update_task(request: TaskSchema, task_id: str ):
     task = await Task.get(task_id)
-    
+
     task.subject = request.subject
     task.theme = request.theme
     task.difficulty  = request.difficulty
@@ -160,7 +160,7 @@ async def update_task(request: TaskSchema, task_id: str ):
 
 
 
-# GET-requests
+# GET-ROUTES
 
 
 
@@ -208,11 +208,11 @@ async def get_definite_task(task_id: str):
 
 
 @router.get(
-        '/export',
-        description='export files into json',
-        responses={
+    '/export',
+    description='export files into json',
+    responses={
 
-        }
+    }
 )
 async def get_tasks_to_json():
     task_data = await Task.find_all().to_list() 
@@ -233,7 +233,16 @@ async def get_tasks_to_json():
 
 
 
-@router.post('/{task_id}/check', description='Check user answer for task')
+@router.post(
+        
+        
+    '/{task_id}/check',
+    description='Check user answer for task',
+    responses={
+              
+
+    }
+)
 async def check_task(task_id: str, payload: CheckAnswer):
     task = await Task.get(task_id)
     if not task:
@@ -250,3 +259,23 @@ async def check_task(task_id: str, payload: CheckAnswer):
         "correct_answer": correct_answer
     }
     
+
+
+# DELETE-ROUTES
+
+
+@router.delete(
+    '/{task_id}',
+    description='Delete tasks by id',
+    responses={
+
+    }
+)
+async def delete_task(task_id:str):
+    task = await Task.get(task_id)
+    
+    if not task:
+        raise Error.TASK_NOT_FOUND
+    await task.delete()
+
+    return {"message": "Task was deleted succesfully"}
