@@ -43,6 +43,7 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
         title = data.title,
         task_text = data.task_text,  
         hint = data.hint,               
+        answer = data.answer,
         is_published = True
     )
     
@@ -56,6 +57,7 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
         title = data.title,
         task_text = data.task_text,  
         hint = data.hint,               
+        answer = data.answer,
         is_published = True
     )
     
@@ -91,6 +93,7 @@ async def post_tasks(file: UploadFile):
             title = task_field["title"],
             task_text = task_field["task_text"],  
             hint = task_field["hint"],               
+            answer = task_field.get("answer"),
             is_published = True
             )
             task = Task.find_one(Task.title == task_field["title"])
@@ -106,6 +109,7 @@ async def post_tasks(file: UploadFile):
                 title = task_field["title"],
                 task_text = task_field["task_text"],  
                 hint = task_field["hint"],               
+                answer = task_field.get("answer"),
                 is_published = True
             ))
         return all_tasks_added
@@ -147,6 +151,7 @@ async def update_task(request: TaskSchema, title: str ):
     task.title = request.title
     task.task_text = request.task_text
     task.hint =   request.hint
+    task.answer = request.answer
     task.is_published = request.is_published
 
     await task.save()

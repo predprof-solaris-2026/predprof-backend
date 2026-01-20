@@ -84,5 +84,6 @@ class TaskSchema(BaseModel):
     title: str
     task_text: str  
     hint: str               
+    answer: Optional[str] = None
     is_published: bool = True
 
