@@ -32,11 +32,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 async def post_tasks(data: TaskSchema) -> TaskSchema:
 
 
-    #проверка на админа будет потом
-    task_exists = Task.find_one(Task.title == data.title)
-    # if task_exists:
-    #     raise Error.TITLE_EXISTS
-    # я пока убрал, сомнительно, тайтлы могут повторяться
+    #Нужна проверка на админа
 
     new_task = Task(
         subject = data.subject,
@@ -65,6 +61,11 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
     
 
 
+
+
+
+
+
 @router.post(
     '/upload/import/json',
     description="import files from json",
@@ -72,13 +73,10 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
              
     }
 )
-
-
-
 async def post_tasks(file: UploadFile):
 
 
-    #проверка на админа будет потом
+    #Нужна проверка на админа
 
     try:
 
@@ -123,6 +121,38 @@ async def post_tasks(file: UploadFile):
 
 
 
+@router.post(
+        
+        
+    '/{task_id}/check',
+    description='Check user answer for task',
+    responses={
+              
+
+    }
+)
+async def check_task(task_id: str, payload: CheckAnswer):
+    task = await Task.get(task_id)
+    if not task:
+        raise Error.TASK_NOT_FOUND
+    correct_answer = task.answer
+    user_answer = payload.answer
+    is_correct = False
+    # simple string comparison (case-insensitive, strip)
+    if correct_answer is not None:
+        is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
+
+    return {
+        "correct": is_correct,
+        "correct_answer": correct_answer
+    }
+    
+
+
+
+
+
+
 # PATCH-ROUTES
 
 
@@ -140,6 +170,9 @@ async def post_tasks(file: UploadFile):
     }
 )
 async def update_task(request: TaskSchema, task_id: str ):
+
+    #Нужна проверка на админа
+
     task = await Task.get(task_id)
 
     task.subject = request.subject
@@ -188,6 +221,11 @@ async def get_tasks():
 
 
 
+
+
+
+
+
 @router.get(
     '/{task_id}',
     description="get definite task by id",
@@ -207,6 +245,11 @@ async def get_definite_task(task_id: str):
 
 
 
+
+
+
+
+
 @router.get(
     '/export',
     description='export files into json',
@@ -215,6 +258,9 @@ async def get_definite_task(task_id: str):
     }
 )
 async def get_tasks_to_json():
+
+    #Нужна проверка на админа? я хз
+
     task_data = await Task.find_all().to_list() 
     task_dict = [task.model_dump() for task in task_data]
     export_tasks = {
@@ -233,35 +279,14 @@ async def get_tasks_to_json():
 
 
 
-@router.post(
-        
-        
-    '/{task_id}/check',
-    description='Check user answer for task',
-    responses={
-              
 
-    }
-)
-async def check_task(task_id: str, payload: CheckAnswer):
-    task = await Task.get(task_id)
-    if not task:
-        raise Error.TASK_NOT_FOUND
-    correct_answer = task.answer
-    user_answer = payload.answer
-    is_correct = False
-    # simple string comparison (case-insensitive, strip)
-    if correct_answer is not None:
-        is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
-
-    return {
-        "correct": is_correct,
-        "correct_answer": correct_answer
-    }
-    
 
 
 # DELETE-ROUTES
+
+
+
+
 
 
 @router.delete(
@@ -272,8 +297,11 @@ async def check_task(task_id: str, payload: CheckAnswer):
     }
 )
 async def delete_task(task_id:str):
+
+    #Нужна проверка на админа
+
     task = await Task.get(task_id)
-    
+
     if not task:
         raise Error.TASK_NOT_FOUND
     await task.delete()
