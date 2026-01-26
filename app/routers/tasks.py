@@ -227,7 +227,7 @@ async def get_tasks():
 
 
 @router.get(
-    '/{task_id}',
+    '/get/{task_id}',
     description="get definite task by id",
     responses={
 
