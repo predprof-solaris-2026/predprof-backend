@@ -32,5 +32,36 @@ async def log_in_user(request: Annotated[OAuth2PasswordRequestForm, Depends()]) 
     token = await authenticate_user(data={"sub": request.username}, expires_delta=token_expires)
 
     return schemas.Token(access_token=token, token_type="bearer")
+
+
+@router.get("/{user_id}")
+async def get_user_by_id(user_id: str) -> schemas.UserResponse:
+    user = await User.get(user_id)
+    if not user:
+        raise Error.NOT_FOUND
     
+    return schemas.UserResponse(
+        id=str(user.id),
+        first_name=user.first_name,
+        last_name=user.last_name,
+        email=user.email,
+        elo_rating=user.elo_rating,
+        is_blocked=user.is_blocked
+    )
+
+
+@router.get("")
+async def get_all_users() -> list[schemas.UserResponse]:
+    users = await User.find_all().to_list()
     
+    return [
+        schemas.UserResponse(
+            id=str(user.id),
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            elo_rating=user.elo_rating,
+            is_blocked=user.is_blocked
+        )
+        for user in users
+    ]
