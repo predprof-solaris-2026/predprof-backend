@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from beanie import Document, Indexed, Link
 from pydantic import BaseModel, Field, EmailStr
-#from app.data.models import Theme, Difficulty
+# from app.data.models import Theme, Difficulty
 
 
 
@@ -78,12 +78,13 @@ class Token(BaseModel):
 
 class TaskSchema(BaseModel):
     # subject: Indexed(str)
+    id: str
     subject: str
     theme: Theme 
     difficulty: Difficulty 
     title: str
     task_text: str  
-    hint: str               
+    hint: Optional[str] = None
     answer: Optional[str] = None
     is_published: bool = True
 

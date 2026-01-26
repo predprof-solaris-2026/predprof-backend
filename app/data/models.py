@@ -52,7 +52,7 @@ class Admin(Document):
 class Task(Document):
     # subject: Indexed(str)
     subject: str
-    theme: Theme 
+    theme: str
     difficulty: Difficulty 
     title: str
     task_text: str  
