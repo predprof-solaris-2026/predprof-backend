@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 
 from beanie import Document, Indexed, Link
 from pydantic import BaseModel, Field, EmailStr
-# from app.data.models import Theme, Difficulty
 
 
 
@@ -23,21 +22,15 @@ class Theme(str, Enum):
 
 
 
-# ---------- Common ----------
-
-
 class TimestampMixin(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-# ---------- PvP (1v1) ----------
-
 class PvpSideState(BaseModel):
     user_id: str
     score: float = 0.0
 
-    # to enforce "replace previous result, do not double points"
     counted_submission_id: Optional[str] = None
     last_submission_id: Optional[str] = None
 
@@ -53,15 +46,14 @@ class PlayerSession(BaseModel):
 
 
 class MatchSessionConfig(BaseModel):
-    """Configuration for a PvP match."""
-    match_timeout_seconds: int = 600  # 10 minutes
-    answer_change_allowed: bool = True  # Allow replacing previous answer
+    match_timeout_seconds: int = 600 
+    answer_change_allowed: bool = True
 
 
 class ThemeStat(BaseModel):
     attempts: int = 0
     correct: int = 0
-    avg_time_ms: Optional[float] = None  # optional running average
+    avg_time_ms: Optional[float] = None
 
 class UserSchema(BaseModel):
     first_name: str
@@ -69,6 +61,7 @@ class UserSchema(BaseModel):
     password: str
     email: str
 
+<<<<<<< HEAD
 
 class AdminSchema(BaseModel):
     first_name: str
@@ -76,6 +69,15 @@ class AdminSchema(BaseModel):
     password: str
     email: str
 
+=======
+class UserResponse(BaseModel):
+    id: str
+    first_name: str
+    last_name: str
+    email: str
+    elo_rating: int
+    is_blocked: bool
+>>>>>>> a21fe367779d4ccefa924b19e394c8865100811d
     
 class UserLogIn(BaseModel):
     user_token: str
