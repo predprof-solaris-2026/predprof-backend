@@ -13,12 +13,16 @@ from app.data import schemas
 from app.data.schemas import Theme, Difficulty
 
 # ---------- Common ----------
-
+'''
 class Role(str, Enum):
     user = "user"
     admin = "admin"
 
     
+    не думаю что это понадобится
+
+
+''' 
 # ---------- Users / Auth ----------
 
 class User(Document):

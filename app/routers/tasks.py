@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, Response, UploadFile
 from pydantic import BaseModel
 from typing import Dict, Any
 from app.data.schemas import TaskSchema, CheckAnswer
-from app.data.models import Task
-from app.utils.security import get_current_user
+from app.data.models import Task, Admin
+from app.utils.security import get_current_user, get_current_admin
 from app.utils.exceptions import Error
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -26,13 +26,11 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
     '/upload',
     description="making tasks (withowt admin check yet)",
     responses={
-            
+        403: {"description": "Forbidden - You are not admin"}
     }
 )
-async def post_tasks(data: TaskSchema) -> TaskSchema:
-
-
-    #Нужна проверка на админа
+async def post_tasks(data: TaskSchema, check_admin: Admin = Depends(get_current_admin)) -> TaskSchema:
+    
 
     new_task = Task(
         subject = data.subject,
@@ -47,8 +45,10 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
     
     await new_task.create()
     await new_task.save()
+    task_id = str(new_task.id)
 
     return TaskSchema(
+        id= task_id,
         subject = data.subject,
         theme = data.theme,
         difficulty = data.difficulty,
@@ -70,10 +70,10 @@ async def post_tasks(data: TaskSchema) -> TaskSchema:
     '/upload/import/json',
     description="import files from json",
     responses={
-             
+        403: {"description": "Forbidden - You are not admin"}
     }
 )
-async def post_tasks(file: UploadFile):
+async def post_tasks(file: UploadFile, check_admin: Admin = Depends(get_current_admin)):
 
 
     #Нужна проверка на админа
@@ -166,10 +166,10 @@ async def check_task(task_id: str, payload: CheckAnswer):
     '/{task_id}',
     description='edit task by id',
     responses={
-
+        403: {"description": "Forbidden - You are not admin"}
     }
 )
-async def update_task(request: TaskSchema, task_id: str ):
+async def update_task(request: TaskSchema, task_id: str, check_admin: Admin = Depends(get_current_admin) ):
 
     #Нужна проверка на админа
 
@@ -254,10 +254,10 @@ async def get_definite_task(task_id: str):
     '/export',
     description='export files into json',
     responses={
-
+        403: {"description": "Forbidden - You are not admin"}
     }
 )
-async def get_tasks_to_json():
+async def get_tasks_to_json(check_admin: Admin = Depends(get_current_admin)):
 
     #Нужна проверка на админа? я хз
 
@@ -293,10 +293,10 @@ async def get_tasks_to_json():
     '/{task_id}',
     description='Delete tasks by id',
     responses={
-
+        403: {"description": "Forbidden - You are not admin"}
     }
 )
-async def delete_task(task_id:str):
+async def delete_task(task_id:str, check_admin: Admin = Depends(get_current_admin)):
 
     #Нужна проверка на админа
 

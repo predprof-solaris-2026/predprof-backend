@@ -68,6 +68,14 @@ class UserSchema(BaseModel):
     last_name: str
     password: str
     email: str
+
+
+class AdminSchema(BaseModel):
+    first_name: str
+    last_name: str
+    password: str
+    email: str
+
     
 class UserLogIn(BaseModel):
     user_token: str
