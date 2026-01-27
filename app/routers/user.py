@@ -31,7 +31,20 @@ async def log_in_user(request: Annotated[OAuth2PasswordRequestForm, Depends()]) 
     token_expires = timedelta(minutes=1440)
     token = await authenticate_user(data={"sub": request.username}, expires_delta=token_expires)
 
-    return schemas.Token(access_token=token, token_type="bearer")
+    return schemas.Token(access_token=str(token), token_type="Bearer")
+
+
+@router.get("/token")
+async def get_user_by_token(current_user: User = Depends(get_current_user)) -> schemas.UserResponse:
+    
+    return schemas.UserResponse(
+        id=str(current_user.id),
+        first_name=current_user.first_name,
+        last_name=current_user.last_name,
+        email=current_user.email,
+        elo_rating=current_user.elo_rating,
+        is_blocked=current_user.is_blocked
+    )
 
 
 @router.get("/{user_id}")
@@ -48,7 +61,8 @@ async def get_user_by_id(user_id: str) -> schemas.UserResponse:
         elo_rating=user.elo_rating,
         is_blocked=user.is_blocked
     )
-
+    
+    
 
 @router.get("")
 async def get_all_users() -> list[schemas.UserResponse]:
