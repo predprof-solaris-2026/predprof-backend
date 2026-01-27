@@ -61,7 +61,6 @@ class UserSchema(BaseModel):
     password: str
     email: str
 
-<<<<<<< HEAD
 
 class AdminSchema(BaseModel):
     first_name: str
@@ -69,7 +68,6 @@ class AdminSchema(BaseModel):
     password: str
     email: str
 
-=======
 class UserResponse(BaseModel):
     id: str
     first_name: str
@@ -77,7 +75,6 @@ class UserResponse(BaseModel):
     email: str
     elo_rating: int
     is_blocked: bool
->>>>>>> a21fe367779d4ccefa924b19e394c8865100811d
     
 class UserLogIn(BaseModel):
     user_token: str
