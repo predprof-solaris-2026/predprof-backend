@@ -8,7 +8,7 @@ from typing import Dict, Optional
 from datetime import datetime, timedelta
 import uuid
 
-from app.data.models import User, PvpMatch, Task, PvpMatchState, PvpOutcome
+from app.data.models import User, PvpMatch, Task, PvpMatchState, PvpOutcome, UserAggregateStats
 from app.data import schemas
 from app.utils.elo import update_ratings_after_match
 from app.utils.exceptions import Error
@@ -39,6 +39,23 @@ class MatchSession:
         self.task: Optional[Task] = None
         self.match_model: Optional[PvpMatch] = None
         self.start_time: datetime = datetime.utcnow()
+
+    async def _update_pvp_aggregate(self, user_id: str, result: str):
+        # result ∈ {"win","loss","draw"}
+        agg = await UserAggregateStats.find_one({"user_id": user_id})
+        if not agg:
+            agg = UserAggregateStats(user_id=user_id)
+
+        agg.pvp.matches += 1
+        if result == "win":
+            agg.pvp.wins += 1
+        elif result == "loss":
+            agg.pvp.losses += 1
+        elif result == "draw":
+            agg.pvp.draws += 1
+
+        agg.updated_at = datetime.utcnow()
+        await agg.save()
     
     async def wait_for_both_players(self, timeout: int = 30) -> bool:
         start = datetime.utcnow()
@@ -123,44 +140,44 @@ class MatchSession:
             }
         }
         await self.broadcast(state)
-    
+
     async def finish_match(self, outcome: str) -> Optional[dict]:
         try:
-            if outcome not in ["p1_win", "p2_win", "draw"]:
+            # 1) защита от двойной финализации (см. пункт 2 ниже)
+            if self.match_model and self.match_model.state != PvpMatchState.active:
+                return None  # уже финализирован, выходим безопасно
+            allowed = {"p1_win", "p2_win", "draw", "canceled", "technical_error"}
+            if outcome not in allowed:
                 outcome = "canceled"
-            
             new_p1_rating = self.p1_session.rating
             new_p2_rating = self.p2_session.rating if self.p2_session else self.p1_session.rating
             p1_delta = 0
             p2_delta = 0
-            
-            if outcome in ["p1_win", "p2_win", "draw"]:
+            # Elo — только для трех «нормальных» исходов
+            if outcome in {"p1_win", "p2_win", "draw"}:
                 new_p1_rating, new_p2_rating, p1_delta, p2_delta = update_ratings_after_match(
-                    self.p1_session.rating,
-                    new_p2_rating,
-                    outcome
+                    self.p1_session.rating, new_p2_rating, outcome
                 )
-            
-            p1_user = await User.find_one(User.id == PydanticObjectId(self.p1_session.user_id))
-            if p1_user:
-                p1_user.elo_rating = new_p1_rating
-                await p1_user.save()
-            
-            if self.p2_session:
-                p2_user = await User.find_one(User.id == PydanticObjectId(self.p2_session.user_id))
-                if p2_user:
-                    p2_user.elo_rating = new_p2_rating
-                    await p2_user.save()
-            
+            # Состояние матча и исход
             if self.match_model:
-                self.match_model.state = PvpMatchState.finished if outcome not in ["canceled", "technical_error"] else (
-                    PvpMatchState.canceled if outcome == "canceled" else PvpMatchState.technical_error
-                )
-                self.match_model.outcome = PvpOutcome(outcome) if outcome in ["p1_win", "p2_win", "draw"] else None
+                if outcome == "canceled":
+                    self.match_model.state = PvpMatchState.canceled
+                elif outcome == "technical_error":
+                    self.match_model.state = PvpMatchState.technical_error
+                else:
+                    self.match_model.state = PvpMatchState.finished
+                self.match_model.outcome = PvpOutcome(outcome) if outcome in {"p1_win", "p2_win", "draw"} else None
                 self.match_model.finished_at = datetime.utcnow()
                 self.match_model.p1_rating_delta = p1_delta
                 self.match_model.p2_rating_delta = p2_delta if self.p2_session else 0
                 await self.match_model.save()
+            # Агрегаты — только при win/loss/draw
+            if outcome in {"p1_win", "p2_win", "draw"}:
+                p1_res = "win" if outcome == "p1_win" else ("loss" if outcome == "p2_win" else "draw")
+                p2_res = "win" if outcome == "p2_win" else ("loss" if outcome == "p1_win" else "draw")
+                await self._update_pvp_aggregate(self.p1_session.user_id, p1_res)
+                if self.p2_session:
+                    await self._update_pvp_aggregate(self.p2_session.user_id, p2_res)
             
             result = {
                 "type": "match_result",

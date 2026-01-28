@@ -25,6 +25,27 @@ class Role(str, Enum):
 ''' 
 # ---------- Users / Auth ----------
 
+class PvpCounters(BaseModel):
+    matches: int = 0       # завершённые матчи (без canceled/technical_error)
+    wins: int = 0
+    losses: int = 0
+    draws: int = 0
+
+class TrainingCounters(BaseModel):
+    attempts: int = 0
+    correct: int = 0
+    incorrect: int = 0
+    by_theme: Dict[str, schemas.ThemeStat] = Field(default_factory=dict)
+
+class UserAggregateStats(Document):
+    user_id: Indexed(str, unique=True)
+    pvp: PvpCounters = Field(default_factory=PvpCounters)
+    training: TrainingCounters = Field(default_factory=TrainingCounters)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    class Settings:
+        name = "user_aggregate_stats"
+        indexes = ["user_id"]
+
 class User(Document):
     first_name: str
     last_name: str
@@ -77,7 +98,7 @@ class Task(Document):
 
 class TrainingSession(Document):
     user_id: Indexed(str) 
-    theme: Theme.math
+    theme: Theme #Math ???
     difficulty: Optional[Difficulty] = None
     elo_rating: int
     started_at: datetime = Field(default_factory=datetime.utcnow)

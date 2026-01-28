@@ -97,3 +97,4 @@ class TaskSchema(BaseModel):
 
 class CheckAnswer(BaseModel):
     answer: str
+    elapsed_ms: Optional[int] = None

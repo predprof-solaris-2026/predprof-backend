@@ -117,6 +117,7 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
             p2=schemas.PvpSideState(user_id=match_session.p2_session.user_id),
         )
         await match_session.match_model.save()
+
         
         await match_session.send_task()
         
@@ -216,15 +217,9 @@ async def get_recent_matches(user: User = Depends(get_current_user), limit: int 
     from app.data.models import PvpMatch
     
     user_id = str(user.id)
-    
-    matches = await PvpMatch.find(
-        {
-            "$or": [
-                {"p1_user_id": user_id},
-                {"p2_user_id": user_id}
-            ]
-        }
-    ).sort([("started_at", -1)]).limit(limit).to_list()
+
+    matches = await PvpMatch.find({"$or": [{"p1_user_id": user_id}, {"p2_user_id": user_id}]}).sort(
+        [("started_at", -1)]).limit(limit).to_list()
     
     results = []
     for match in matches:
@@ -249,10 +244,8 @@ async def get_recent_matches(user: User = Depends(get_current_user), limit: int 
 @router.get("/rating-leaderboard")
 async def get_leaderboard(limit: int = 20):
     from app.data.models import User
-    
-    top_players = await User.find(
-        User.is_blocked == False
-    ).sort([("elo_rating", -1)]).limit(limit).to_list()
+
+    top_players = await User.find(User.is_blocked == False).sort([("elo_rating", -1)]).limit(limit).to_list()
     
     leaderboard = [
         {
