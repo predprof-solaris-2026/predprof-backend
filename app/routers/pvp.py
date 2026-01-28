@@ -37,7 +37,7 @@ async def websocket_pvp_match(websocket: WebSocket):
             await websocket.close(code=1008)
             return
         
-        user = await get_current_user_websocket(token)
+        user = await get_current_user(token)
         user_id = str(user.id)
         
         match_id = await pvp_manager.queue_player(user_id, user.elo_rating, websocket)
