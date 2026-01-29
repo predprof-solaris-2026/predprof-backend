@@ -29,7 +29,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
         403: {"description": "Forbidden - You are not admin"}
     }
 )
-async def post_tasks(data: TaskSchema, check_admin: Admin = Depends(get_current_admin)) -> TaskSchema:
+async def post_tasks(data: TaskSchema) -> TaskSchema:
     
 
     new_task = Task(

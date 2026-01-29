@@ -143,22 +143,30 @@ class MatchSession:
 
     async def finish_match(self, outcome: str) -> Optional[dict]:
         try:
-            # 1) защита от двойной финализации (см. пункт 2 ниже)
+            # Идемпотентность: выходим, если уже не active
             if self.match_model and self.match_model.state != PvpMatchState.active:
-                return None  # уже финализирован, выходим безопасно
+                return None
+
             allowed = {"p1_win", "p2_win", "draw", "canceled", "technical_error"}
             if outcome not in allowed:
                 outcome = "canceled"
-            new_p1_rating = self.p1_session.rating
-            new_p2_rating = self.p2_session.rating if self.p2_session else self.p1_session.rating
+
+            # Сохраняем старые рейтинги ДЛЯ ответа и вычислений
+            old_p1 = self.p1_session.rating
+            old_p2 = self.p2_session.rating if self.p2_session else None
+
+            new_p1_rating = old_p1
+            new_p2_rating = old_p2 if old_p2 is not None else old_p1
             p1_delta = 0
             p2_delta = 0
-            # Elo — только для трех «нормальных» исходов
+
+            # Elo — только для трёх "нормальных" исходов
             if outcome in {"p1_win", "p2_win", "draw"}:
                 new_p1_rating, new_p2_rating, p1_delta, p2_delta = update_ratings_after_match(
-                    self.p1_session.rating, new_p2_rating, outcome
+                    old_p1, new_p2_rating, outcome
                 )
-            # Состояние матча и исход
+
+            # Обновляем модель матча
             if self.match_model:
                 if outcome == "canceled":
                     self.match_model.state = PvpMatchState.canceled
@@ -166,42 +174,62 @@ class MatchSession:
                     self.match_model.state = PvpMatchState.technical_error
                 else:
                     self.match_model.state = PvpMatchState.finished
+
                 self.match_model.outcome = PvpOutcome(outcome) if outcome in {"p1_win", "p2_win", "draw"} else None
                 self.match_model.finished_at = datetime.utcnow()
                 self.match_model.p1_rating_delta = p1_delta
                 self.match_model.p2_rating_delta = p2_delta if self.p2_session else 0
                 await self.match_model.save()
-            # Агрегаты — только при win/loss/draw
+
+            # Обновляем рейтинги пользователей ТОЛЬКО для win/loss/draw
+            if outcome in {"p1_win", "p2_win", "draw"}:
+                p1_user = await User.find_one({"_id": PydanticObjectId(self.p1_session.user_id)})
+                if p1_user:
+                    p1_user.elo_rating = new_p1_rating
+                    await p1_user.save()
+
+                if self.p2_session:
+                    p2_user = await User.find_one({"_id": PydanticObjectId(self.p2_session.user_id)})
+                    if p2_user:
+                        p2_user.elo_rating = new_p2_rating
+                        await p2_user.save()
+
+                # Обновляем значения в сессии (для последующих сообщений)
+                self.p1_session.rating = new_p1_rating
+                if self.p2_session:
+                    self.p2_session.rating = new_p2_rating
+
+            # Агрегаты — только для win/loss/draw
             if outcome in {"p1_win", "p2_win", "draw"}:
                 p1_res = "win" if outcome == "p1_win" else ("loss" if outcome == "p2_win" else "draw")
                 p2_res = "win" if outcome == "p2_win" else ("loss" if outcome == "p1_win" else "draw")
                 await self._update_pvp_aggregate(self.p1_session.user_id, p1_res)
                 if self.p2_session:
                     await self._update_pvp_aggregate(self.p2_session.user_id, p2_res)
-            
+
+            # Формируем ответ, используя старые рейтинги
             result = {
                 "type": "match_result",
                 "outcome": outcome,
                 "p1": {
                     "user_id": self.p1_session.user_id,
-                    "old_rating": self.p1_session.rating,
+                    "old_rating": old_p1,
                     "new_rating": new_p1_rating,
                     "delta": p1_delta,
                 },
                 "p2": {
                     "user_id": self.p2_session.user_id if self.p2_session else None,
-                    "old_rating": self.p2_session.rating if self.p2_session else None,
+                    "old_rating": old_p2,
                     "new_rating": new_p2_rating if self.p2_session else None,
                     "delta": p2_delta if self.p2_session else 0,
                 }
             }
-            
             await self.broadcast(result)
             return result
+
         except Exception as e:
             print(f"Error finishing match {self.match_id}: {e}")
             return None
-
 
 class ConnectionManager:    
     def __init__(self):
