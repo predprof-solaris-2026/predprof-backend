@@ -73,7 +73,7 @@ class Task(Document):
         name = "tasks"
         indexes = [
             [("subject", 1), ("theme", 1), ("difficulty", 1)],
-            "is_published",
+            "is_published", "source"
         ]
 
 
@@ -104,13 +104,14 @@ class PvpOutcome(str, Enum):
     p1_win = "p1_win"
     p2_win = "p2_win"
     draw = "draw"
-    # Для canceled/technical_error outcome хранится как None
+    canceled = "canceled"
+    technical_error = "technical_error"
 
 
 class PvpMatch(Document):
     # matchmaking "by level": store rating at start (snapshot)
     p1_user_id: Indexed(str)
-    p2_user_id: Optional[str] = None
+    p2_user_id: Optional[Indexed(str)] = None
     p1_rating_start: int
     p2_rating_start: Optional[int] = None
     task_id: Indexed(str)
@@ -130,8 +131,8 @@ class PvpMatch(Document):
             "state",
             "task_id",
             "started_at",
-            [("p1_user_id", 1), ("started_at", -1)],
-            [("p2_user_id", 1), ("started_at", -1)],
+            [("p1_user_id", 1), ("created_at", -1)],
+            [("p2_user_id", 1), ("created_at", -1)],
         ]
 
 
@@ -189,7 +190,7 @@ class AdminFront(Document):
 
 
 class Arrow(Document):
-    ids: List[int] = Field(default_factory=list)
+    ids: list[int] = Field(default_factory=list)
 
 
 # ---------- Tokens ----------
