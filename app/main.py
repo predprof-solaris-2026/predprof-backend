@@ -5,7 +5,11 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import MONGO_DSN, ENVIRONMENT, projectConfig
-from app.routers import user, tasks, pvp, training
+from app.routers import user, tasks, pvp, training, stats, rating
+
+# ВАЖНО: форсируем загрузку всех моделей до init_beanie
+from app.data import models as _models  # noqa: F401
+
 if ENVIRONMENT == "prod":
     app = FastAPI(
         title=projectConfig.__projname__,
@@ -29,6 +33,8 @@ api_router.include_router(user.router)
 api_router.include_router(tasks.router)
 api_router.include_router(pvp.router)
 api_router.include_router(training.router)
+api_router.include_router(stats.router)
+api_router.include_router(rating.router)
 app.include_router(api_router)
 
 @app.on_event('startup')

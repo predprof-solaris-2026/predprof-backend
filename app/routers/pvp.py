@@ -1,6 +1,6 @@
-
 import asyncio
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 
@@ -8,54 +8,70 @@ from app.data.models import User, PvpMatch, Task, PvpMatchState
 from app.utils.security import get_current_user
 from app.utils.pvp_manager import pvp_manager, MatchSession
 from app.data import schemas
-from datetime import datetime
 
 router = APIRouter(prefix="/pvp", tags=["PvP"])
 
 
 @router.websocket("/")
 async def websocket_pvp_match(websocket: WebSocket):
+    """
+    1) Client connects with JWT token ({"type":"auth"|"bearer","token":"..."}).
+    2) Player added to matchmaking queue.
+    3) When paired: both players receive tasks (3 раунда).
+    4) Players submit answers with submission IDs.
+    5) Match result calculated (win/loss/draw).
+    6) Elo updated only for completed outcomes; aggregates updated.
+    """
     await websocket.accept()
-    token = None
-    msg = await websocket.receive_json()
-    if msg.get("type") == "bearer":
-        token = msg.get("token")
-    
-    if not token:
-        await websocket.send_json({"type": "error", "message": "Missing authentication token"})
-        await websocket.close(code=1008)
-        return
-    print(0)
-    user = await get_current_user(token)
-    user_id = str(user.id)
-    
-    print(user_id)
-    match_id = await pvp_manager.queue_player(user_id, user.elo_rating, websocket)
-    # print(match_id)
-    if match_id:
-        match_session = pvp_manager.get_match(match_id)
-        await handle_active_match(match_session, user_id)
-    else:
-        await handle_queued_player(user_id, websocket, user.elo_rating)
+    user = None
+    user_id = None
+    try:
+        token = None
+        msg = await websocket.receive_json()
+        if msg.get("type") in ("auth", "bearer"):
+            token = msg.get("token")
+        if not token:
+            await websocket.send_json({"type": "error", "message": "Missing authentication token"})
+            await websocket.close(code=1008)
+            return
+
+        user = await get_current_user(token)
+        user_id = str(user.id)
+
+        match_id = await pvp_manager.queue_player(user_id, user.elo_rating, websocket)
+        if match_id:
+            match_session = pvp_manager.get_match(match_id)
+            await handle_active_match(match_session, user_id)
+        else:
+            await handle_queued_player(user_id, websocket, user.elo_rating)
+    except WebSocketDisconnect:
+        if user_id:
+            await pvp_manager.remove_player(user_id)
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        try:
+            await websocket.close(code=1011)
+        except Exception:
+            pass
+
 
 async def handle_queued_player(user_id: str, websocket: WebSocket, rating: int):
-
     await websocket.send_json({
         "type": "queued",
         "message": "Waiting for opponent...",
         "rating": rating
     })
-    
     while True:
         try:
             msg = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
         except asyncio.TimeoutError:
             msg = None
-        if msg is not None:
-            if msg.get("type") == "cancel":
-                await pvp_manager.remove_player(user_id)
-                await websocket.send_json({"type": "canceled", "message": "Removed from queue"})
-                break
+
+        if msg is not None and msg.get("type") == "cancel":
+            await pvp_manager.remove_player(user_id)
+            await websocket.send_json({"type": "canceled", "message": "Removed from queue"})
+            break
+
         match_id = pvp_manager.get_player_match(user_id)
         if match_id:
             match_session = pvp_manager.get_match(match_id)
@@ -63,114 +79,125 @@ async def handle_queued_player(user_id: str, websocket: WebSocket, rating: int):
             break
 
 
-async def handle_active_match(match_session: MatchSession, current_user_id: str):    
+async def handle_active_match(match_session: MatchSession, current_user_id: str):
+    # ждём второго игрока
     if not match_session.p2_session:
         if not await match_session.wait_for_both_players(timeout=30):
             return
-        
-    if (current_user_id != match_session.p1_session.user_id and 
-        current_user_id != match_session.p2_session.user_id):
+
+    # верификация принадлежности
+    if (current_user_id != match_session.p1_session.user_id
+            and current_user_id != match_session.p2_session.user_id):
         await match_session.p1_session.websocket.send_json({
             "type": "error",
             "message": "User not part of this match"
         })
         return
-    
+
     try:
+        # создаём запись матча (задачу будем проставлять каждый раунд)
         match_session.match_model = PvpMatch(
             p1_user_id=match_session.p1_session.user_id,
             p2_user_id=match_session.p2_session.user_id,
             p1_rating_start=match_session.p1_session.rating,
             p2_rating_start=match_session.p2_session.rating,
-            task_id="",
+            task_id="",  # будет обновлён на каждом раунде
             state=PvpMatchState.active,
             started_at=datetime.utcnow(),
             p1=schemas.PvpSideState(user_id=match_session.p1_session.user_id),
             p2=schemas.PvpSideState(user_id=match_session.p2_session.user_id),
         )
         await match_session.match_model.save()
-        
+
+        # сброс счёта
         match_session.p1_score = 0
         match_session.p2_score = 0
-        answer_timeout = 300
 
-        for round_num in range(3):
-            match_session.current_round = round_num + 1
-            
+        answer_timeout = 300  # секунд
+
+        for round_num in range(1, match_session.rounds_total + 1):
+            match_session.current_round = round_num
+
+            # берём любую опубликованную задачу
             task = await Task.find_one(Task.is_published == True)
             if not task:
                 await match_session.broadcast({"type": "error", "message": "No tasks available"})
                 await match_session.finish_match("canceled")
                 return
-            
+
             match_session.task = task
             match_session.match_model.task_id = str(task.id)
             await match_session.match_model.save()
-            
+
+            # сброс ответов
             match_session.p1_session.answer = None
             match_session.p1_session.counted_submission_id = None
             match_session.p2_session.answer = None
             match_session.p2_session.counted_submission_id = None
-            
+
+            # отправляем задачу
             await match_session.send_task()
-            
             start_time = datetime.utcnow()
+
+            # ждём ответы до тайм-аута
             while (datetime.utcnow() - start_time).total_seconds() < answer_timeout:
                 if match_session.p1_session.answer and match_session.p2_session.answer:
                     break
-                
+
                 try:
-                    websocket = match_session.p1_session.websocket if current_user_id == match_session.p1_session.user_id else match_session.p2_session.websocket
+                    websocket = (
+                        match_session.p1_session.websocket
+                        if current_user_id == match_session.p1_session.user_id
+                        else match_session.p2_session.websocket
+                    )
                     msg = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
-                    
+
                     if msg.get("type") == "answer":
                         submission_id = msg.get("submission_id", str(uuid.uuid4()))
                         answer = msg.get("answer", "")
-                        
                         counted = match_session.handle_answer_submission(current_user_id, answer, submission_id)
-                        
                         await websocket.send_json({
                             "type": "answer_received",
                             "submission_id": submission_id,
                             "counted": counted,
                             "message": "Answer recorded" if counted else "Answer rejected (duplicate)"
                         })
-                        
                         await match_session.broadcast_state()
-                    
+
                     elif msg.get("type") == "disconnect":
                         await match_session.finish_match("technical_error")
                         return
-                
+
                 except asyncio.TimeoutError:
                     continue
                 except Exception as e:
                     print(f"Error receiving answer: {e}")
                     break
-            
+
+            # проверяем корректность и обновляем счёт
             p1_ans = match_session.p1_session.answer
             p2_ans = match_session.p2_session.answer
             p1_correct = (p1_ans is not None and task.answer is not None and p1_ans == task.answer)
             p2_correct = (p2_ans is not None and task.answer is not None and p2_ans == task.answer)
-            
+
             if p1_correct:
                 match_session.p1_score += 1
             if p2_correct:
                 match_session.p2_score += 1
-            
-            await asyncio.sleep(1)
-        
+
+            await asyncio.sleep(0.2)
+
+        # финальный исход по очкам
         if match_session.p1_score > match_session.p2_score:
             outcome = "p1_win"
         elif match_session.p2_score > match_session.p1_score:
             outcome = "p2_win"
         else:
-            outcome = "draw"  
-        
+            outcome = "draw"
+
         await match_session.finish_match(outcome)
-        
-        await asyncio.sleep(2)
-    
+        await asyncio.sleep(0.2)
+
     except WebSocketDisconnect:
         if match_session.match_model and match_session.match_model.state == PvpMatchState.active:
             await match_session.finish_match("technical_error")
@@ -185,14 +212,13 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
 @router.get("/queue-status")
 async def get_queue_status(user: User = Depends(get_current_user)):
     user_id = str(user.id)
-    
     if user_id in pvp_manager.player_queue:
         return {
             "status": "queued",
             "rating": user.elo_rating,
             "queue_size": len(pvp_manager.player_queue)
         }
-    
+
     match_id = pvp_manager.get_player_match(user_id)
     if match_id:
         match_session = pvp_manager.get_match(match_id)
@@ -200,67 +226,50 @@ async def get_queue_status(user: User = Depends(get_current_user)):
             return {
                 "status": "in_match",
                 "match_id": match_id,
-                "opponent_id": (match_session.p2_session.user_id 
-                               if match_session.p2_session else None),
-                "opponent_rating": (match_session.p2_session.rating 
-                                   if match_session.p2_session else None)
+                "opponent_id": (match_session.p2_session.user_id
+                                if match_session.p2_session else None),
+                "opponent_rating": (match_session.p2_session.rating
+                                    if match_session.p2_session else None)
             }
-    
+
     return {"status": "idle", "rating": user.elo_rating}
 
 
 @router.get("/matches/recent")
 async def get_recent_matches(user: User = Depends(get_current_user), limit: int = 10):
-    from app.data.models import PvpMatch
-    
     user_id = str(user.id)
-    
     matches = await PvpMatch.find(
-        {
-            "$or": [
-                {"p1_user_id": user_id},
-                {"p2_user_id": user_id}
-            ]
-        }
+        {"$or": [{"p1_user_id": user_id}, {"p2_user_id": user_id}]}
     ).sort([("started_at", -1)]).limit(limit).to_list()
-    
+
     results = []
     for match in matches:
         is_p1 = match.p1_user_id == user_id
         opponent_id = match.p2_user_id if is_p1 else match.p1_user_id
-        
-        result = {
+        results.append({
             "match_id": str(match.id),
             "opponent_id": opponent_id,
             "my_rating_before": match.p1_rating_start if is_p1 else match.p2_rating_start,
             "my_rating_delta": match.p1_rating_delta if is_p1 else match.p2_rating_delta,
-            "outcome": match.outcome,
-            "state": match.state,
+            "outcome": (match.outcome.value if match.outcome else None),
+            "state": match.state.value if hasattr(match.state, "value") else str(match.state),
             "started_at": match.started_at,
             "finished_at": match.finished_at,
-        }
-        results.append(result)
-    
+        })
     return results
 
 
 @router.get("/rating-leaderboard")
 async def get_leaderboard(limit: int = 20):
-    from app.data.models import User
-    
-    top_players = await User.find(
-        User.is_blocked == False
-    ).sort([("elo_rating", -1)]).limit(limit).to_list()
-    
+    top_players = await User.find(User.is_blocked == False).sort([("elo_rating", -1)]).limit(limit).to_list()
     leaderboard = [
         {
             "rank": idx + 1,
             "user_id": str(user.id),
             "email": user.email,
             "rating": user.elo_rating,
-            "name": f"{user.first_name} {user.last_name}"
+            "name": f"{user.first_name} {user.last_name}".strip(),
         }
         for idx, user in enumerate(top_players)
     ]
-    
     return leaderboard
