@@ -77,7 +77,7 @@ class Task(Document):
 
 class TrainingSession(Document):
     user_id: Indexed(str) 
-    theme: Theme.math
+    theme: Theme
     difficulty: Optional[Difficulty] = None
     elo_rating: int
     started_at: datetime = Field(default_factory=datetime.utcnow)
@@ -117,8 +117,8 @@ class PvpMatch(Document):
 
     task_id: Indexed(str)
 
-    state: PvpMatchState.waiting
-    outcome: PvpOutcome = None
+    state: PvpMatchState = PvpMatchState.waiting
+    outcome: Optional[PvpOutcome] = None
 
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
@@ -208,7 +208,7 @@ class AdminFront(Document):
 
 
 class Arrow(Document):
-    ids: list[int] = []
+    ids: list[int] = Field(default_factory=list)
 
 
 class Token(BaseModel):

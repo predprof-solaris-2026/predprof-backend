@@ -2,24 +2,12 @@ import json
 from fastapi import APIRouter, Depends, Response, UploadFile
 from pydantic import BaseModel
 from typing import Dict, Any
-from app.data.schemas import TaskSchema, CheckAnswer
+from app.data.schemas import TaskSchema, CheckAnswer, TaskSchemaRequest
 from app.data.models import Task, Admin
 from app.utils.security import get_current_user, get_current_admin
 from app.utils.exceptions import Error
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
-
-
-
-
-
-
-
-# POST-ROUTES
-
-
-
-
 
 
 @router.post(
@@ -29,7 +17,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
         403: {"description": "Forbidden - You are not admin"}
     }
 )
-async def post_tasks(data: TaskSchema, check_admin: Admin = Depends(get_current_admin)) -> TaskSchema:
+async def post_tasks(data: TaskSchemaRequest, check_admin: Admin = Depends(get_current_admin)) -> TaskSchema:
     
 
     new_task = Task(
@@ -74,10 +62,6 @@ async def post_tasks(data: TaskSchema, check_admin: Admin = Depends(get_current_
     }
 )
 async def post_tasks(file: UploadFile, check_admin: Admin = Depends(get_current_admin)):
-
-
-    #Нужна проверка на админа
-
     try:
 
         content = await file.read()
@@ -114,12 +98,6 @@ async def post_tasks(file: UploadFile, check_admin: Admin = Depends(get_current_
     except Exception as e:
         raise Error.FILE_READ_ERROR
         
-
-
-
-
-
-
 
 @router.post(
         

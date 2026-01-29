@@ -95,5 +95,15 @@ class TaskSchema(BaseModel):
     answer: Optional[str] = None
     is_published: bool = True
 
+class TaskSchemaRequest(BaseModel):
+    subject: str
+    theme: Theme 
+    difficulty: Difficulty 
+    title: str
+    task_text: str  
+    hint: Optional[str] = None
+    answer: Optional[str] = None
+    is_published: bool = True
+
 class CheckAnswer(BaseModel):
     answer: str

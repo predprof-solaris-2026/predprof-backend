@@ -15,73 +15,52 @@ router = APIRouter(prefix="/pvp", tags=["PvP"])
 
 @router.websocket("/")
 async def websocket_pvp_match(websocket: WebSocket):
-    """
-    1. Client connects with JWT token
-    2. Player added to matchmaking queue
-    3. When paired: both players receive task
-    4. Players submit answers with submission IDs
-    5. Match result calculated (win/loss/draw)
-    6. Elo ratings updated and persisted
-    7. Result sent to both players
-    """
     await websocket.accept()
+    token = None
+    msg = await websocket.receive_json()
+    if msg.get("type") == "bearer":
+        token = msg.get("token")
     
-    try:
-        token = None
-        msg = await websocket.receive_json()
-        if msg.get("type") == "auth":
-            token = msg.get("token")
-        
-        if not token:
-            await websocket.send_json({"type": "error", "message": "Missing authentication token"})
-            await websocket.close(code=1008)
-            return
-        
-        user = await get_current_user(token)
-        user_id = str(user.id)
-        
-        match_id = await pvp_manager.queue_player(user_id, user.elo_rating, websocket)
-        
-        if match_id:
-            match_session = pvp_manager.get_match(match_id)
-            await handle_active_match(match_session, user_id)
-        else:
-            await handle_queued_player(user_id, websocket, user.elo_rating)
+    if not token:
+        await websocket.send_json({"type": "error", "message": "Missing authentication token"})
+        await websocket.close(code=1008)
+        return
+    print(0)
+    user = await get_current_user(token)
+    user_id = str(user.id)
     
-    except WebSocketDisconnect:
-        await pvp_manager.remove_player(user_id)
-    except Exception as e:
-        print(f"WebSocket error: {e}")
-        try:
-            await websocket.close(code=1011)
-        except:
-            pass
-
+    print(user_id)
+    match_id = await pvp_manager.queue_player(user_id, user.elo_rating, websocket)
+    # print(match_id)
+    if match_id:
+        match_session = pvp_manager.get_match(match_id)
+        await handle_active_match(match_session, user_id)
+    else:
+        await handle_queued_player(user_id, websocket, user.elo_rating)
 
 async def handle_queued_player(user_id: str, websocket: WebSocket, rating: int):
-    try:
-        await websocket.send_json({
-            "type": "queued",
-            "message": "Waiting for opponent...",
-            "rating": rating
-        })
-        
-        while True:
-            msg = await websocket.receive_json()
-            
+
+    await websocket.send_json({
+        "type": "queued",
+        "message": "Waiting for opponent...",
+        "rating": rating
+    })
+    
+    while True:
+        try:
+            msg = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
+        except asyncio.TimeoutError:
+            msg = None
+        if msg is not None:
             if msg.get("type") == "cancel":
                 await pvp_manager.remove_player(user_id)
                 await websocket.send_json({"type": "canceled", "message": "Removed from queue"})
                 break
-            
-            match_id = pvp_manager.get_player_match(user_id)
-            if match_id:
-                match_session = pvp_manager.get_match(match_id)
-                await handle_active_match(match_session, user_id)
-                break
-    
-    except WebSocketDisconnect:
-        await pvp_manager.remove_player(user_id)
+        match_id = pvp_manager.get_player_match(user_id)
+        if match_id:
+            match_session = pvp_manager.get_match(match_id)
+            await handle_active_match(match_session, user_id)
+            break
 
 
 async def handle_active_match(match_session: MatchSession, current_user_id: str):    
@@ -98,19 +77,12 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
         return
     
     try:
-        task = await Task.find_one(Task.is_published == True)
-        if not task:
-            await match_session.broadcast({"type": "error", "message": "No tasks available"})
-            return
-        
-        match_session.task = task
-        
         match_session.match_model = PvpMatch(
             p1_user_id=match_session.p1_session.user_id,
             p2_user_id=match_session.p2_session.user_id,
             p1_rating_start=match_session.p1_session.rating,
             p2_rating_start=match_session.p2_session.rating,
-            task_id=str(task.id),
+            task_id="",
             state=PvpMatchState.active,
             started_at=datetime.utcnow(),
             p1=schemas.PvpSideState(user_id=match_session.p1_session.user_id),
@@ -118,55 +90,82 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
         )
         await match_session.match_model.save()
         
-        await match_session.send_task()
-        
+        match_session.p1_score = 0
+        match_session.p2_score = 0
         answer_timeout = 300
-        start_time = datetime.utcnow()
-        
-        while (datetime.utcnow() - start_time).total_seconds() < answer_timeout:
-            if match_session.p1_session.answer and match_session.p2_session.answer:
-                break
+
+        for round_num in range(3):
+            match_session.current_round = round_num + 1
             
-            try:
-                websocket = match_session.p1_session.websocket if current_user_id == match_session.p1_session.user_id else match_session.p2_session.websocket
-                msg = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
-                
-                if msg.get("type") == "answer":
-                    submission_id = msg.get("submission_id", str(uuid.uuid4()))
-                    answer = msg.get("answer", "")
-                    
-                    counted = match_session.handle_answer_submission(current_user_id, answer, submission_id)
-                    
-                    await websocket.send_json({
-                        "type": "answer_received",
-                        "submission_id": submission_id,
-                        "counted": counted,
-                        "message": "Answer recorded" if counted else "Answer rejected (duplicate)"
-                    })
-                    
-                    await match_session.broadcast_state()
-                
-                elif msg.get("type") == "disconnect":
-                    await match_session.finish_match("technical_error")
-                    return
+            task = await Task.find_one(Task.is_published == True)
+            if not task:
+                await match_session.broadcast({"type": "error", "message": "No tasks available"})
+                await match_session.finish_match("canceled")
+                return
             
-            except asyncio.TimeoutError:
-                continue
-            except Exception as e:
-                print(f"Error receiving answer: {e}")
-                break
+            match_session.task = task
+            match_session.match_model.task_id = str(task.id)
+            await match_session.match_model.save()
+            
+            match_session.p1_session.answer = None
+            match_session.p1_session.counted_submission_id = None
+            match_session.p2_session.answer = None
+            match_session.p2_session.counted_submission_id = None
+            
+            await match_session.send_task()
+            
+            start_time = datetime.utcnow()
+            while (datetime.utcnow() - start_time).total_seconds() < answer_timeout:
+                if match_session.p1_session.answer and match_session.p2_session.answer:
+                    break
+                
+                try:
+                    websocket = match_session.p1_session.websocket if current_user_id == match_session.p1_session.user_id else match_session.p2_session.websocket
+                    msg = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
+                    
+                    if msg.get("type") == "answer":
+                        submission_id = msg.get("submission_id", str(uuid.uuid4()))
+                        answer = msg.get("answer", "")
+                        
+                        counted = match_session.handle_answer_submission(current_user_id, answer, submission_id)
+                        
+                        await websocket.send_json({
+                            "type": "answer_received",
+                            "submission_id": submission_id,
+                            "counted": counted,
+                            "message": "Answer recorded" if counted else "Answer rejected (duplicate)"
+                        })
+                        
+                        await match_session.broadcast_state()
+                    
+                    elif msg.get("type") == "disconnect":
+                        await match_session.finish_match("technical_error")
+                        return
+                
+                except asyncio.TimeoutError:
+                    continue
+                except Exception as e:
+                    print(f"Error receiving answer: {e}")
+                    break
+            
+            p1_ans = match_session.p1_session.answer
+            p2_ans = match_session.p2_session.answer
+            p1_correct = (p1_ans is not None and task.answer is not None and p1_ans == task.answer)
+            p2_correct = (p2_ans is not None and task.answer is not None and p2_ans == task.answer)
+            
+            if p1_correct:
+                match_session.p1_score += 1
+            if p2_correct:
+                match_session.p2_score += 1
+            
+            await asyncio.sleep(1)
         
-        if match_session.p1_session.answer and match_session.p2_session.answer:
-            if match_session.p1_session.answer == match_session.p2_session.answer:
-                outcome = "draw"
-            else:
-                outcome = "p1_win"
-        elif match_session.p1_session.answer:
+        if match_session.p1_score > match_session.p2_score:
             outcome = "p1_win"
-        elif match_session.p2_session.answer:
+        elif match_session.p2_score > match_session.p1_score:
             outcome = "p2_win"
         else:
-            outcome = "canceled"  
+            outcome = "draw"  
         
         await match_session.finish_match(outcome)
         
@@ -212,7 +211,6 @@ async def get_queue_status(user: User = Depends(get_current_user)):
 
 @router.get("/matches/recent")
 async def get_recent_matches(user: User = Depends(get_current_user), limit: int = 10):
-    """Get user's recent PvP matches."""
     from app.data.models import PvpMatch
     
     user_id = str(user.id)

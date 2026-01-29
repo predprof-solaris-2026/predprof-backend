@@ -1,6 +1,4 @@
-"""
-Matchmaking and connection management for PvP WebSocket.
-"""
+
 
 import asyncio
 import json
@@ -39,6 +37,10 @@ class MatchSession:
         self.task: Optional[Task] = None
         self.match_model: Optional[PvpMatch] = None
         self.start_time: datetime = datetime.utcnow()
+        self.rounds_total: int = 3
+        self.current_round: int = 0
+        self.p1_score: int = 0
+        self.p2_score: int = 0
     
     async def wait_for_both_players(self, timeout: int = 30) -> bool:
         start = datetime.utcnow()
@@ -69,7 +71,6 @@ class MatchSession:
             "task_text": self.task.task_text,
             "theme": self.task.theme,
             "difficulty": self.task.difficulty,
-            "hint": self.task.hint,
         }
         await self.broadcast(task_data)
     
@@ -108,24 +109,30 @@ class MatchSession:
                 except Exception:
                     session.connected = False
     
-    async def broadcast_state(self):
+    async def broadcast_state(self, include_ratings: bool = False):
         state = {
             "type": "state_update",
+            "round": self.current_round,
+            "rounds_total": self.rounds_total,
             "p1": {
                 "user_id": self.p1_session.user_id,
-                "rating": self.p1_session.rating,
+                "rating": (self.p1_session.rating if include_ratings else None),
                 "answered": self.p1_session.answer is not None,
+                "score": self.p1_score,
             },
             "p2": {
                 "user_id": self.p2_session.user_id if self.p2_session else None,
-                "rating": self.p2_session.rating if self.p2_session else None,
+                "rating": (self.p2_session.rating if (include_ratings and self.p2_session) else None),
                 "answered": (self.p2_session.answer is not None) if self.p2_session else False,
+                "score": (self.p2_score if self.p2_session else 0),
             }
         }
         await self.broadcast(state)
     
     async def finish_match(self, outcome: str) -> Optional[dict]:
         try:
+            if self.match_model and self.match_model.state not in (PvpMatchState.active,):
+                return None
             if outcome not in ["p1_win", "p2_win", "draw"]:
                 outcome = "canceled"
             
@@ -137,7 +144,7 @@ class MatchSession:
             if outcome in ["p1_win", "p2_win", "draw"]:
                 new_p1_rating, new_p2_rating, p1_delta, p2_delta = update_ratings_after_match(
                     self.p1_session.rating,
-                    new_p2_rating,
+                    self.p2_session.rating if self.p2_session else self.p1_session.rating,
                     outcome
                 )
             
@@ -189,17 +196,17 @@ class MatchSession:
 class ConnectionManager:    
     def __init__(self):
         self.active_matches: Dict[str, MatchSession] = {}
-        self.player_queue: Dict[str, PlayerSession] = {}  # user_id -> PlayerSession
+        self.player_queue: Dict[str, PlayerSession] = {} 
         self.match_lock = asyncio.Lock()
     
     async def queue_player(self, user_id: str, rating: int, websocket: WebSocket) -> Optional[str]:
         async with self.match_lock:
             player = PlayerSession(user_id=user_id, websocket=websocket, rating=rating)
-            
             waiting_players = list(self.player_queue.values())
             if waiting_players:
                 best_match = None
                 for candidate in waiting_players:
+                    print(abs(candidate.rating - rating), 4)
                     if abs(candidate.rating - rating) <= 200: 
                         best_match = candidate
                         break
