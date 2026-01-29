@@ -15,14 +15,13 @@ router = APIRouter(prefix="/pvp", tags=["PvP"])
 @router.websocket("/")
 async def websocket_pvp_match(websocket: WebSocket):
     """
-    1) Client connects with JWT token (first message: {"type": "auth"|"bearer","token":"..."}).
+    1) Client connects with JWT token ({"type":"auth"|"bearer","token":"..."}).
     2) Player added to matchmaking queue.
     3) When paired: both players receive tasks (3 раунда).
-    4) Players submit answers with submission IDs; duplicates не удваивают очки.
+    4) Players submit answers with submission IDs.
     5) Match result calculated (win/loss/draw).
-    6) Elo ratings updated and persisted; aggregates updated.
+    6) Elo updated only for completed outcomes; aggregates updated.
     """
-
     await websocket.accept()
     user = None
     user_id = None
@@ -45,7 +44,6 @@ async def websocket_pvp_match(websocket: WebSocket):
             await handle_active_match(match_session, user_id)
         else:
             await handle_queued_player(user_id, websocket, user.elo_rating)
-
     except WebSocketDisconnect:
         if user_id:
             await pvp_manager.remove_player(user_id)
@@ -88,8 +86,8 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
             return
 
     # верификация принадлежности
-    if (current_user_id != match_session.p1_session.user_id and
-            current_user_id != match_session.p2_session.user_id):
+    if (current_user_id != match_session.p1_session.user_id
+            and current_user_id != match_session.p2_session.user_id):
         await match_session.p1_session.websocket.send_json({
             "type": "error",
             "message": "User not part of this match"
@@ -97,13 +95,13 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
         return
 
     try:
-        # Создаём запись матча (первый task проставим сразу после выборки)
+        # создаём запись матча (задачу будем проставлять каждый раунд)
         match_session.match_model = PvpMatch(
             p1_user_id=match_session.p1_session.user_id,
             p2_user_id=match_session.p2_session.user_id,
             p1_rating_start=match_session.p1_session.rating,
             p2_rating_start=match_session.p2_session.rating,
-            task_id="",  # будет обновлён ниже
+            task_id="",  # будет обновлён на каждом раунде
             state=PvpMatchState.active,
             started_at=datetime.utcnow(),
             p1=schemas.PvpSideState(user_id=match_session.p1_session.user_id),
@@ -111,15 +109,16 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
         )
         await match_session.match_model.save()
 
+        # сброс счёта
         match_session.p1_score = 0
         match_session.p2_score = 0
-        rounds = 3
+
         answer_timeout = 300  # секунд
 
-        for round_num in range(rounds):
-            match_session.current_round = round_num + 1
+        for round_num in range(1, match_session.rounds_total + 1):
+            match_session.current_round = round_num
 
-            # Берём любую опубликованную задачу (при желании можно добавить случайность/фильтры)
+            # берём любую опубликованную задачу
             task = await Task.find_one(Task.is_published == True)
             if not task:
                 await match_session.broadcast({"type": "error", "message": "No tasks available"})
@@ -130,25 +129,27 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
             match_session.match_model.task_id = str(task.id)
             await match_session.match_model.save()
 
-            # Сброс ответов
+            # сброс ответов
             match_session.p1_session.answer = None
             match_session.p1_session.counted_submission_id = None
             match_session.p2_session.answer = None
             match_session.p2_session.counted_submission_id = None
 
-            # Отправляем задачу обоим
+            # отправляем задачу
             await match_session.send_task()
             start_time = datetime.utcnow()
 
+            # ждём ответы до тайм-аута
             while (datetime.utcnow() - start_time).total_seconds() < answer_timeout:
-                # если оба успели ответить — идем к проверке
                 if match_session.p1_session.answer and match_session.p2_session.answer:
                     break
 
                 try:
-                    websocket = (match_session.p1_session.websocket
-                                 if current_user_id == match_session.p1_session.user_id
-                                 else match_session.p2_session.websocket)
+                    websocket = (
+                        match_session.p1_session.websocket
+                        if current_user_id == match_session.p1_session.user_id
+                        else match_session.p2_session.websocket
+                    )
                     msg = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
 
                     if msg.get("type") == "answer":
@@ -173,7 +174,7 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
                     print(f"Error receiving answer: {e}")
                     break
 
-            # Проверяем корректность
+            # проверяем корректность и обновляем счёт
             p1_ans = match_session.p1_session.answer
             p2_ans = match_session.p2_session.answer
             p1_correct = (p1_ans is not None and task.answer is not None and p1_ans == task.answer)
@@ -184,10 +185,9 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
             if p2_correct:
                 match_session.p2_score += 1
 
-            # короткая пауза между раундами
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.2)
 
-        # Итог по очкам
+        # финальный исход по очкам
         if match_session.p1_score > match_session.p2_score:
             outcome = "p1_win"
         elif match_session.p2_score > match_session.p1_score:
@@ -196,7 +196,7 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
             outcome = "draw"
 
         await match_session.finish_match(outcome)
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.2)
 
     except WebSocketDisconnect:
         if match_session.match_model and match_session.match_model.state == PvpMatchState.active:
@@ -246,7 +246,7 @@ async def get_recent_matches(user: User = Depends(get_current_user), limit: int 
     for match in matches:
         is_p1 = match.p1_user_id == user_id
         opponent_id = match.p2_user_id if is_p1 else match.p1_user_id
-        result = {
+        results.append({
             "match_id": str(match.id),
             "opponent_id": opponent_id,
             "my_rating_before": match.p1_rating_start if is_p1 else match.p2_rating_start,
@@ -255,24 +255,21 @@ async def get_recent_matches(user: User = Depends(get_current_user), limit: int 
             "state": match.state.value if hasattr(match.state, "value") else str(match.state),
             "started_at": match.started_at,
             "finished_at": match.finished_at,
-        }
-        results.append(result)
+        })
     return results
 
 
 @router.get("/rating-leaderboard")
 async def get_leaderboard(limit: int = 20):
-    top_players = await User.find(User.is_blocked == False)\
-        .sort([("elo_rating", -1)])\
-        .limit(limit).to_list()
+    top_players = await User.find(User.is_blocked == False).sort([("elo_rating", -1)]).limit(limit).to_list()
     leaderboard = [
         {
             "rank": idx + 1,
-            "user_id": str(u.id),
-            "email": u.email,
-            "rating": u.elo_rating,
-            "name": f"{u.first_name} {u.last_name}".strip()
+            "user_id": str(user.id),
+            "email": user.email,
+            "rating": user.elo_rating,
+            "name": f"{user.first_name} {user.last_name}".strip(),
         }
-        for idx, u in enumerate(top_players)
+        for idx, user in enumerate(top_players)
     ]
     return leaderboard
