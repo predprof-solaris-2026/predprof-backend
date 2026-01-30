@@ -14,8 +14,11 @@ router = APIRouter(prefix="/pvp", tags=["PvP"])
 
 @router.websocket("/")
 async def websocket_pvp_match(websocket: WebSocket):
+    print(7)
     await websocket.accept()
+    print(8)
     user = None
+    print(3)
     user_id = None
     print('--------')
     try:
