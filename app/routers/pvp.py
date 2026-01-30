@@ -3,9 +3,11 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+import httpx
+from datetime import timezone
 
 from app.data.models import User, PvpMatch, Task, PvpMatchState
-from app.utils.security import get_current_user, get_current_user_websocket
+from app.utils.security import get_current_user
 from app.utils.pvp_manager import pvp_manager, MatchSession
 from app.data import schemas
 
@@ -14,33 +16,52 @@ router = APIRouter(prefix="/pvp", tags=["PvP"])
 
 @router.websocket("/")
 async def websocket_pvp_match(websocket: WebSocket):
-    print(7)
     await websocket.accept()
-    print(8)
     user = None
-    print(3)
     user_id = None
-    print('--------')
     try:
-        print(0)
         token = None
         msg = await websocket.receive_json()
-        print(1)
         if msg.get("type") in ("auth", "bearer"):
             token = msg.get("token")
-        print(2)
         if not token:
-            print(3)
             await websocket.send_json({"type": "error", "message": "Missing authentication token"})
             await websocket.close(code=1008)
             return
-        print("bef user")
-        user = await get_current_user_websocket(token)
-        print("af user", user)
-        if not user:
+
+        try:
+            from app.main import app as fastapi_app
+            async with httpx.AsyncClient(app=fastapi_app, base_url="http://testserver") as client:
+                resp = await client.post("/api/auth/validate-token", json={"token": token}, timeout=5.0)
+        except Exception:
+            await websocket.send_json({"type": "error", "message": "Authentication service unreachable"})
+            await websocket.close(code=1011)
+            return
+
+        if resp.status_code != 200:
             await websocket.send_json({"type": "error", "message": "Invalid authentication token"})
             await websocket.close(code=1008)
             return
+
+        data = resp.json()
+        sub = data.get("sub")
+        exp = data.get("exp")
+        if not sub or exp is None:
+            await websocket.send_json({"type": "error", "message": "Invalid token payload"})
+            await websocket.close(code=1008)
+            return
+
+        if datetime.fromtimestamp(exp, tz=timezone.utc) < datetime.now(tz=timezone.utc):
+            await websocket.send_json({"type": "error", "message": "Token expired"})
+            await websocket.close(code=1008)
+            return
+
+        user = await User.find_one(User.email == sub, fetch_links=True)
+        if not user:
+            await websocket.send_json({"type": "error", "message": "User not found"})
+            await websocket.close(code=1008)
+            return
+
         user_id = str(user.id)
 
         print("bef queued", user)

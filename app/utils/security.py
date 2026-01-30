@@ -15,6 +15,8 @@ from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 
+from datetime import datetime, timezone
+
 context_pass = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/user/login")
 
@@ -44,19 +46,6 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         raise Error.UNAUTHORIZED_INVALID
     except Exception:
         raise Error.UNAUTHORIZED_INVALID
-    
-async def get_current_user_websocket(token: Annotated[str, Depends(oauth2_scheme)]):
-        payload = _decode_with_fallback(token)
-        if not payload:
-            return None
-        username: str = payload.get("sub")
-        if not username:
-            return None
-        token_data = TokenData(username=username)
-        user = await User.find_one(User.email == token_data.username, fetch_links=True)
-        if user is None:
-            return None
-        return user
     
 async def get_current_admin(token: Annotated[str, Depends(oauth2_scheme)]):
     try:
