@@ -116,7 +116,6 @@ async def check_task(task_id: str, payload: CheckAnswer):
     correct_answer = task.answer
     user_answer = payload.answer
     is_correct = False
-    # simple string comparison (case-insensitive, strip)
     if correct_answer is not None:
         is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
 
@@ -124,19 +123,6 @@ async def check_task(task_id: str, payload: CheckAnswer):
         "correct": is_correct,
         "correct_answer": correct_answer
     }
-    
-
-
-
-
-
-
-# PATCH-ROUTES
-
-
-
-
-
 
 
 
@@ -148,9 +134,6 @@ async def check_task(task_id: str, payload: CheckAnswer):
     }
 )
 async def update_task(request: TaskSchema, task_id: str, check_admin: Admin = Depends(get_current_admin) ):
-
-    #Нужна проверка на админа
-
     task = await Task.get(task_id)
 
     task.subject = request.subject
@@ -164,19 +147,6 @@ async def update_task(request: TaskSchema, task_id: str, check_admin: Admin = De
 
     await task.save()
     return task
-
-
-
-
-
-
-
-# GET-ROUTES
-
-
-
-
-
 
 
 @router.get(
@@ -216,7 +186,6 @@ async def get_definite_task(task_id: str):
     if not task:
         raise Error.TASK_NOT_FOUND
     task_dict: Dict[str, Any] = task.model_dump()
-    # do not expose correct answer
     if 'answer' in task_dict:
         task_dict.pop('answer')
     return task_dict
@@ -236,9 +205,6 @@ async def get_definite_task(task_id: str):
     }
 )
 async def get_tasks_to_json(check_admin: Admin = Depends(get_current_admin)):
-
-    #Нужна проверка на админа? я хз
-
     task_data = await Task.find_all().to_list() 
     task_dict = [task.model_dump() for task in task_data]
     export_tasks = {
@@ -253,20 +219,6 @@ async def get_tasks_to_json(check_admin: Admin = Depends(get_current_admin)):
     )
 
 
-
-
-
-
-
-
-
-# DELETE-ROUTES
-
-
-
-
-
-
 @router.delete(
     '/{task_id}',
     description='Delete tasks by id',
@@ -275,9 +227,6 @@ async def get_tasks_to_json(check_admin: Admin = Depends(get_current_admin)):
     }
 )
 async def delete_task(task_id:str, check_admin: Admin = Depends(get_current_admin)):
-
-    #Нужна проверка на админа
-
     task = await Task.get(task_id)
 
     if not task:

@@ -14,14 +14,6 @@ router = APIRouter(prefix="/pvp", tags=["PvP"])
 
 @router.websocket("/")
 async def websocket_pvp_match(websocket: WebSocket):
-    """
-    1) Client connects with JWT token ({"type":"auth"|"bearer","token":"..."}).
-    2) Player added to matchmaking queue.
-    3) When paired: both players receive tasks (3 раунда).
-    4) Players submit answers with submission IDs.
-    5) Match result calculated (win/loss/draw).
-    6) Elo updated only for completed outcomes; aggregates updated.
-    """
     await websocket.accept()
     user = None
     user_id = None
@@ -37,6 +29,10 @@ async def websocket_pvp_match(websocket: WebSocket):
         print("bef user")
         user = await get_current_user_websocket(token)
         print("af user", user)
+        if not user:
+            await websocket.send_json({"type": "error", "message": "Invalid authentication token"})
+            await websocket.close(code=1008)
+            return
         user_id = str(user.id)
 
         print("bef queued", user)

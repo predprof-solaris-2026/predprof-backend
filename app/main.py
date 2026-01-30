@@ -7,8 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import MONGO_DSN, ENVIRONMENT, projectConfig
 from app.routers import user, tasks, pvp, training, stats, rating
 
-# ВАЖНО: форсируем загрузку всех моделей до init_beanie
-from app.data import models as _models  # noqa: F401
+from app.data import models as _models 
 
 if ENVIRONMENT == "prod":
     app = FastAPI(

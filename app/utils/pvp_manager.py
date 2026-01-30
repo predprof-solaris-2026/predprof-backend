@@ -45,19 +45,16 @@ class MatchSession:
         self.match_model: Optional[PvpMatch] = None
         self.start_time: datetime = datetime.utcnow()
 
-        # from origin/main (раунды)
         self.rounds_total: int = 3
         self.current_round: int = 0
         self.p1_score: int = 0
         self.p2_score: int = 0
 
-        # task selection state: prepared once per match to ensure uniqueness and identical tasks for both players
         self.selected_tasks: Optional[list] = None
         self.tasks_prepared: bool = False
         self.tasks_lock: asyncio.Lock = asyncio.Lock()
 
     async def _update_pvp_aggregate(self, user_id: str, result: str):
-        # result ∈ {"win","loss","draw"}
         agg = await UserAggregateStats.find_one({"user_id": user_id})
         if not agg:
             agg = UserAggregateStats(user_id=user_id)
@@ -89,8 +86,6 @@ class MatchSession:
         return True
 
     async def prepare_tasks(self):
-        """Prepare a randomized, unique list of tasks for the match.
-        Returns (True, '') on success, or (False, error_message) on failure."""
         async with self.tasks_lock:
             if self.tasks_prepared:
                 return True, ""
@@ -184,7 +179,6 @@ class MatchSession:
 
     async def finish_match(self, outcome: str) -> Optional[dict]:
         try:
-            # идемпотентность
             if self.match_model and self.match_model.state != PvpMatchState.active:
                 return None
 
@@ -192,7 +186,6 @@ class MatchSession:
             if outcome not in allowed:
                 outcome = "canceled"
 
-            # старые рейтинги (для ответа)
             old_p1 = self.p1_session.rating
             old_p2 = self.p2_session.rating if self.p2_session else None
 
@@ -201,7 +194,6 @@ class MatchSession:
             p1_delta = 0
             p2_delta = 0
 
-            # Elo только для win/loss/draw
             if outcome in {"p1_win", "p2_win", "draw"}:
                 new_p1_rating, new_p2_rating, p1_delta, p2_delta = update_ratings_after_match(
                     old_p1,
@@ -209,7 +201,6 @@ class MatchSession:
                     outcome
                 )
 
-            # записываем матч
             if self.match_model:
                 if outcome == "canceled":
                     self.match_model.state = PvpMatchState.canceled
@@ -224,7 +215,6 @@ class MatchSession:
                 self.match_model.p2_rating_delta = p2_delta if self.p2_session else 0
                 await self.match_model.save()
 
-            # обновляем рейтинги пользователей только для win/loss/draw
             if outcome in {"p1_win", "p2_win", "draw"}:
                 p1_user = await User.find_one({"_id": PydanticObjectId(self.p1_session.user_id)})
                 if p1_user:
@@ -237,12 +227,10 @@ class MatchSession:
                         p2_user.elo_rating = new_p2_rating
                         await p2_user.save()
 
-                # обновляем значения в сессии
                 self.p1_session.rating = new_p1_rating
                 if self.p2_session:
                     self.p2_session.rating = new_p2_rating
 
-            # агрегаты — только при завершённых исходах
             if outcome in {"p1_win", "p2_win", "draw"}:
                 p1_res = "win" if outcome == "p1_win" else ("loss" if outcome == "p2_win" else "draw")
                 p2_res = "win" if outcome == "p2_win" else ("loss" if outcome == "p1_win" else "draw")
@@ -250,7 +238,6 @@ class MatchSession:
                 if self.p2_session:
                     await self._update_pvp_aggregate(self.p2_session.user_id, p2_res)
 
-            # ответ клиентам — с "старыми" рейтингами
             result = {
                 "type": "match_result",
                 "outcome": outcome,
@@ -277,7 +264,7 @@ class MatchSession:
 class ConnectionManager:
     def __init__(self):
         self.active_matches: Dict[str, MatchSession] = {}
-        self.player_queue: Dict[str, PlayerSession] = {}  # user_id -> PlayerSession
+        self.player_queue: Dict[str, PlayerSession] = {}
         self.match_lock = asyncio.Lock()
 
     async def queue_player(self, user_id: str, rating: int, websocket: WebSocket) -> Optional[str]:

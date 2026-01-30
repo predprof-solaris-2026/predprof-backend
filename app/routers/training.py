@@ -84,32 +84,26 @@ async def check_answer(
         is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
 
     uid = str(current_user.id)
-    theme_key = task.theme  # строковое значение темы
+    theme_key = task.theme
 
-    # 1) Legacy статистика (user_stats) — дополним корректно
     user_stats = await UserStats.find_one({"user_id": uid})
     if not user_stats:
         user_stats = UserStats(user_id=uid)
 
-    # глобальные счетчики
     user_stats.attempts += 1
     if is_correct:
         user_stats.correct += 1
 
-    # по темам
     tstat = user_stats.by_theme.get(theme_key, ThemeStat())
     tstat.attempts += 1
     if is_correct:
         tstat.correct += 1
 
-    # время (если пришло)
     if payload.elapsed_ms is not None:
-        # глобальное среднее
         prev_avg = user_stats.avg_time_ms or 0.0
         n_prev = user_stats.attempts - 1
         user_stats.avg_time_ms = ((prev_avg * n_prev) + payload.elapsed_ms) / user_stats.attempts
 
-        # среднее по теме
         prev_t_avg = tstat.avg_time_ms or 0.0
         n_prev_t = tstat.attempts - 1
         tstat.avg_time_ms = ((prev_t_avg * n_prev_t) + payload.elapsed_ms) / tstat.attempts
@@ -117,7 +111,6 @@ async def check_answer(
     user_stats.by_theme[theme_key] = tstat
     await user_stats.save()
 
-    # 2) Новая агрегированная статистика (user_aggregate_stats)
     agg = await UserAggregateStats.find_one({"user_id": uid})
     if not agg:
         agg = UserAggregateStats(user_id=uid)

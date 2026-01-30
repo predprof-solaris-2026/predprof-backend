@@ -14,7 +14,6 @@ from app.utils.elo import calculate_win_probability, calculate_elo_change
 router = APIRouter(prefix="/rating", tags=["Rating"])
 
 
-# ---------- Response Schemas ----------
 class UserPublic(BaseModel):
     id: str
     email: EmailStr
@@ -59,7 +58,7 @@ class LeaderboardResponse(BaseModel):
 class ProbabilityResponse(BaseModel):
     my_rating: int
     opponent_rating: int
-    expected_score: float  # вероятность победы по формуле Elo (ожидаемый счёт), 0..1
+    expected_score: float 
 
 
 class ProjectionDeltas(BaseModel):
@@ -91,7 +90,6 @@ class MatchHistoryResponse(BaseModel):
     limit: int
 
 
-# ---------- Helpers ----------
 def _user_public(u: User) -> UserPublic:
     return UserPublic(
         id=str(u.id),
@@ -127,7 +125,6 @@ async def _get_pvp_summary(user_id: str) -> PvpSummary:
 
 
 async def _rank_and_percentile(my_rating: int) -> tuple[int, float, int]:
-    # ранг — количество пользователей с рейтингом строго выше + 1 (tie получают одинаковый ранг)
     total = await User.find({"is_blocked": False}).count()
     if total == 0:
         return 1, 0.0, 0
@@ -138,12 +135,10 @@ async def _rank_and_percentile(my_rating: int) -> tuple[int, float, int]:
     return rank, round(percentile, 2), total
 
 
-# ---------- Endpoints ----------
 @router.get("/me", response_model=RatingSummary)
 async def get_my_rating(current_user: User = Depends(get_current_user)) -> RatingSummary:
     rank, percentile, total = await _rank_and_percentile(current_user.elo_rating)
     pvp = await _get_pvp_summary(str(current_user.id))
-    # пробуем взять timestamp обновления из агрегатов
     agg = await UserAggregateStats.find_one({"user_id": str(current_user.id)})
     return RatingSummary(
         user=_user_public(current_user),
@@ -259,7 +254,6 @@ async def get_my_rating_history(
     current_user: User = Depends(get_current_user),
 ) -> MatchHistoryResponse:
     user_id = str(current_user.id)
-    # последние матчи пользователя (оба направления) — сортируем по finished_at убыв.
     matches = (
         await PvpMatch.find(
             {"$or": [{"p1_user_id": user_id}, {"p2_user_id": user_id}]}

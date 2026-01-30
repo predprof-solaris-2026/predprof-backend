@@ -2,8 +2,8 @@ from typing import Annotated
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError, DecodeError
 
-from app import ALGORITHM, SECRET_KEY  # основной секрет
-# опционально: если у вас есть второй ключ (например, старые токены)
+from app import ALGORITHM, SECRET_KEY
+
 try:
     from app import SECRET_KEY_USER as ALT_SECRET_KEY
 except Exception:
@@ -48,23 +48,14 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
 async def get_current_user_websocket(token: Annotated[str, Depends(oauth2_scheme)]):
         payload = _decode_with_fallback(token)
         if not payload:
-            return {
-                "type": "error",
-                "message": 401
-            }
+            return None
         username: str = payload.get("sub")
         if not username:
-            return {
-                "type": "error",
-                "message": 401
-            }
+            return None
         token_data = TokenData(username=username)
         user = await User.find_one(User.email == token_data.username, fetch_links=True)
         if user is None:
-            return {
-                "type": "error",
-                "message": 401
-            }
+            return None
         return user
     
 async def get_current_admin(token: Annotated[str, Depends(oauth2_scheme)]):

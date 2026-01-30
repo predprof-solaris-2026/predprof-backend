@@ -14,7 +14,6 @@ from app.utils.security import get_current_user, get_current_admin
 router = APIRouter(prefix="/stats", tags=["Stats"])
 
 
-# ---------- Response Schemas ----------
 class StatsPvp(BaseModel):
     matches: int
     wins: int
@@ -56,7 +55,6 @@ class StatsResponse(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-# ---------- Helpers ----------
 async def _get_user_or_404(user_id: str) -> User:
     user = await User.find_one(User.id == PydanticObjectId(user_id))
     if not user:
@@ -79,7 +77,6 @@ def _build_training_summary(agg: UserAggregateStats) -> StatsTraining:
     incorrect = agg.training.incorrect or max(0, attempts - correct)
     accuracy = (correct / attempts * 100.0) if attempts > 0 else 0.0
 
-    # by_theme + взвешенное среднее по времени (если есть)
     by_theme_resp: Dict[str, StatsTrainingByThemeItem] = {}
     sum_time = 0.0
     sum_attempts_time = 0
@@ -95,7 +92,7 @@ def _build_training_summary(agg: UserAggregateStats) -> StatsTraining:
             correct=t_correct,
             incorrect=t_incorrect,
             accuracy_pct=round(t_accuracy, 2),
-            avg_time_ms=tstat.avg_time_ms,
+            avg_time_ms=tstat.avg_time_ms
         )
 
         if tstat.avg_time_ms is not None and t_attempts > 0:
@@ -110,14 +107,14 @@ def _build_training_summary(agg: UserAggregateStats) -> StatsTraining:
         incorrect=incorrect,
         accuracy_pct=round(accuracy, 2),
         avg_time_ms=weighted_avg_time,
-        by_theme=by_theme_resp,
+        by_theme=by_theme_resp
     )
 
 
 async def _load_agg_or_default(user_id: str) -> UserAggregateStats:
     agg = await UserAggregateStats.find_one({"user_id": user_id})
     if not agg:
-        agg = UserAggregateStats(user_id=user_id)  # не сохраняем, возвращаем «ноль»
+        agg = UserAggregateStats(user_id=user_id) 
     return agg
 
 
@@ -128,14 +125,13 @@ def _user_public(u: User) -> UserPublic:
         first_name=u.first_name,
         last_name=u.last_name,
         elo_rating=u.elo_rating,
-        is_blocked=u.is_blocked,
+        is_blocked=u.is_blocked
     )
 
 
-# ---------- Endpoints ----------
 @router.get("/me", response_model=StatsResponse)
 async def get_my_stats(current_user: User = Depends(get_current_user)) -> StatsResponse:
-    user = current_user  # уже гарантированно существует
+    user = current_user 
     agg = await _load_agg_or_default(str(user.id))
 
     return StatsResponse(
@@ -149,7 +145,7 @@ async def get_my_stats(current_user: User = Depends(get_current_user)) -> StatsR
 @router.get("/users/{user_id}", response_model=StatsResponse)
 async def get_user_stats(
     user_id: str = Path(..., description="ID пользователя"),
-    _admin=Depends(get_current_admin),  # просто проверка прав
+    _admin=Depends(get_current_admin)
 ) -> StatsResponse:
     user = await _get_user_or_404(user_id)
     agg = await _load_agg_or_default(user_id)
