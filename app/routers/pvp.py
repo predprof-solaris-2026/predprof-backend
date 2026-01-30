@@ -34,24 +34,35 @@ async def websocket_pvp_match(websocket: WebSocket):
             await websocket.send_json({"type": "error", "message": "Missing authentication token"})
             await websocket.close(code=1008)
             return
-
+        print('before user')
         user = await get_current_user(token)
         user_id = str(user.id)
 
+        print('before queue')
         match_id = await pvp_manager.queue_player(user_id, user.elo_rating, websocket)
+        print('after queue')
         if match_id:
+            print('match found')
             match_session = pvp_manager.get_match(match_id)
+            print('match getted')
             await handle_active_match(match_session, user_id)
+            print('match handled')
         else:
+            print('match not found')
             await handle_queued_player(user_id, websocket, user.elo_rating)
-    except WebSocketDisconnect:
+            print('match not found end')
+    except WebSocketDisconnect as e:
         if user_id:
+            print(f'wsdis{e}')
             await pvp_manager.remove_player(user_id)
+            print(f'pl removed')
     except Exception as e:
         print(f"WebSocket error: {e}")
         try:
+            print(f'ws clos')
             await websocket.close(code=1011)
         except Exception:
+            print(f'ws clos ex')
             pass
 
 
