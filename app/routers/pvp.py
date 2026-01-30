@@ -22,28 +22,26 @@ async def websocket_pvp_match(websocket: WebSocket):
     5) Match result calculated (win/loss/draw).
     6) Elo updated only for completed outcomes; aggregates updated.
     """
-    print("conn")
     await websocket.accept()
-    print("conned")
     user = None
     user_id = None
     try:
         token = None
-        print("before rec")
         msg = await websocket.receive_json()
-        print("after rec", msg)
         if msg.get("type") in ("auth", "bearer"):
             token = msg.get("token")
-            print(token)
         if not token:
             await websocket.send_json({"type": "error", "message": "Missing authentication token"})
             await websocket.close(code=1008)
             return
         print("bef user")
         user = await get_current_user(token)
+        print("af user", user)
         user_id = str(user.id)
 
+        print("bef queued", user)
         match_id = await pvp_manager.queue_player(user_id, user.elo_rating, websocket)
+        print("queued", user)
         if match_id:
             match_session = pvp_manager.get_match(match_id)
             await handle_active_match(match_session, user_id)
