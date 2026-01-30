@@ -17,40 +17,39 @@ async def websocket_pvp_match(websocket: WebSocket):
     await websocket.accept()
     user = None
     user_id = None
-    try:
-        token = None
-        msg = await websocket.receive_json()
-        if msg.get("type") in ("auth", "bearer"):
-            token = msg.get("token")
-        if not token:
-            await websocket.send_json({"type": "error", "message": "Missing authentication token"})
-            await websocket.close(code=1008)
-            return
-        print("bef user")
-        user = await get_current_user_websocket(token)
-        print("af user", user)
-        if not user:
-            await websocket.send_json({"type": "error", "message": "Invalid authentication token"})
-            await websocket.close(code=1008)
-            return
-        user_id = str(user.id)
 
-        print("bef queued", user)
-        match_id = await pvp_manager.queue_player(user_id, user.elo_rating, websocket)
-        print("queued", user)
-        if match_id:
-            match_session = pvp_manager.get_match(match_id)
-            await handle_active_match(match_session, user_id)
-        else:
-            await handle_queued_player(user_id, websocket, user.elo_rating)
-    except WebSocketDisconnect as e:
-        if user_id:
-            await pvp_manager.remove_player(user_id)
-    except Exception as e:
-        try:
-            await websocket.close(code=1011)
-        except Exception:
-            pass
+    token = None
+    msg = await websocket.receive_json()
+    if msg.get("type") in ("auth", "bearer"):
+        token = msg.get("token")
+    if not token:
+        await websocket.send_json({"type": "error", "message": "Missing authentication token"})
+        await websocket.close(code=1008)
+        return
+    print("bef user")
+    user = await get_current_user_websocket(token)
+    print("af user", user)
+    if not user:
+        await websocket.send_json({"type": "error", "message": "Invalid authentication token"})
+        await websocket.close(code=1008)
+        return
+    user_id = str(user.id)
+    print("bef queued", user)
+    match_id = await pvp_manager.queue_player(user_id, user.elo_rating, websocket)
+    print("queued", user)
+    if match_id:
+        match_session = pvp_manager.get_match(match_id)
+        await handle_active_match(match_session, user_id)
+    else:
+        await handle_queued_player(user_id, websocket, user.elo_rating)
+    # except WebSocketDisconnect as e:
+    #     if user_id:
+    #         await pvp_manager.remove_player(user_id)
+    # except Exception as e:
+    #     try:
+    #         await websocket.close(code=1011)
+    #     except Exception:
+    #         pass
 
 
 async def handle_queued_player(user_id: str, websocket: WebSocket, rating: int):
