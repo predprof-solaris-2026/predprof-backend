@@ -17,6 +17,7 @@ async def websocket_pvp_match(websocket: WebSocket):
     await websocket.accept()
     user = None
     user_id = None
+    print('--------')
     try:
         print(0)
         token = None
