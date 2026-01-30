@@ -1,6 +1,5 @@
 import asyncio
 import uuid
-import random
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
@@ -114,25 +113,16 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
 
         answer_timeout = 300 
 
-        published_count = await Task.find(Task.is_published == True).count()
-        if published_count < 3:
-            await match_session.broadcast({"type": "error", 
-                                           "message": "Not enough tasks in database (minimum 3)"})
+        success, err_msg = await match_session.prepare_tasks()
+        if not success:
+            await match_session.broadcast({"type": "error", "message": err_msg})
             await match_session.finish_match("canceled")
             return
-        if published_count < match_session.rounds_total:
-            await match_session.broadcast({"type": "error", 
-                                           "message": "Not enough tasks for this match (increase task pool)"})
-            await match_session.finish_match("canceled")
-            return
-
-        available_tasks = await Task.find(Task.is_published == True).to_list()
-        selected_tasks = random.sample(available_tasks, match_session.rounds_total)
 
         for round_num in range(1, match_session.rounds_total + 1):
             match_session.current_round = round_num
 
-            task = selected_tasks[round_num - 1]
+            task = match_session.selected_tasks[round_num - 1]
             match_session.task = task
             match_session.match_model.task_id = str(task.id)
             await match_session.match_model.save()

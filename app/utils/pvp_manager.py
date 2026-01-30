@@ -5,6 +5,7 @@ import asyncio
 from typing import Dict, Optional
 from datetime import datetime
 import uuid
+import random
 
 from fastapi import WebSocket
 from beanie import PydanticObjectId
@@ -50,6 +51,11 @@ class MatchSession:
         self.p1_score: int = 0
         self.p2_score: int = 0
 
+        # task selection state: prepared once per match to ensure uniqueness and identical tasks for both players
+        self.selected_tasks: Optional[list] = None
+        self.tasks_prepared: bool = False
+        self.tasks_lock: asyncio.Lock = asyncio.Lock()
+
     async def _update_pvp_aggregate(self, user_id: str, result: str):
         # result ∈ {"win","loss","draw"}
         agg = await UserAggregateStats.find_one({"user_id": user_id})
@@ -81,6 +87,28 @@ class MatchSession:
             "players": [self.p1_session.user_id, self.p2_session.user_id]
         })
         return True
+
+    async def prepare_tasks(self):
+        """Prepare a randomized, unique list of tasks for the match.
+        Returns (True, '') on success, or (False, error_message) on failure."""
+        async with self.tasks_lock:
+            if self.tasks_prepared:
+                return True, ""
+
+            published_count = await Task.find(Task.is_published == True).count()
+            if published_count < 3:
+                return False, "Not enough tasks in database (minimum 3 required)"
+            if published_count < self.rounds_total:
+                return False, "Not enough tasks for this match (increase task pool)"
+
+            available_tasks = await Task.find(Task.is_published == True).to_list()
+            try:
+                self.selected_tasks = random.sample(available_tasks, self.rounds_total)
+            except ValueError:
+                return False, "Unable to select tasks for match"
+
+            self.tasks_prepared = True
+            return True, ""
 
     async def send_task(self):
         if not self.task:
