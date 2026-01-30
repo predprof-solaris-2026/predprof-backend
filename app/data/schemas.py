@@ -59,14 +59,14 @@ class UserSchema(BaseModel):
     first_name: str
     last_name: str
     password: str
-    email: str
+    email: EmailStr
 
 
 class AdminSchema(BaseModel):
     first_name: str
     last_name: str
     password: str
-    email: str
+    email: EmailStr
 
 class UserResponse(BaseModel):
     id: str
