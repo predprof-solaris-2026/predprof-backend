@@ -43,9 +43,30 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     except (InvalidTokenError, ExpiredSignatureError, DecodeError):
         raise Error.UNAUTHORIZED_INVALID
     except Exception:
-        # на всякий пожарный — не светим детали
         raise Error.UNAUTHORIZED_INVALID
-
+    
+async def get_current_user_websocket(token: Annotated[str, Depends(oauth2_scheme)]):
+        payload = _decode_with_fallback(token)
+        if not payload:
+            return {
+                "type": "error",
+                "message": 401
+            }
+        username: str = payload.get("sub")
+        if not username:
+            return {
+                "type": "error",
+                "message": 401
+            }
+        token_data = TokenData(username=username)
+        user = await User.find_one(User.email == token_data.username, fetch_links=True)
+        if user is None:
+            return {
+                "type": "error",
+                "message": 401
+            }
+        return user
+    
 async def get_current_admin(token: Annotated[str, Depends(oauth2_scheme)]):
     try:
         payload = _decode_with_fallback(token)

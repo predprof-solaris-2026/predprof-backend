@@ -1,11 +1,12 @@
 import asyncio
 import uuid
+import random
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 
 from app.data.models import User, PvpMatch, Task, PvpMatchState
-from app.utils.security import get_current_user
+from app.utils.security import get_current_user, get_current_user_websocket
 from app.utils.pvp_manager import pvp_manager, MatchSession
 from app.data import schemas
 
@@ -35,7 +36,7 @@ async def websocket_pvp_match(websocket: WebSocket):
             await websocket.close(code=1008)
             return
         print("bef user")
-        user = await get_current_user(token)
+        user = await get_current_user_websocket(token)
         print("af user", user)
         user_id = str(user.id)
 
@@ -82,12 +83,10 @@ async def handle_queued_player(user_id: str, websocket: WebSocket, rating: int):
 
 
 async def handle_active_match(match_session: MatchSession, current_user_id: str):
-    # ждём второго игрока
     if not match_session.p2_session:
         if not await match_session.wait_for_both_players(timeout=30):
             return
 
-    # верификация принадлежности
     if (current_user_id != match_session.p1_session.user_id
             and current_user_id != match_session.p2_session.user_id):
         await match_session.p1_session.websocket.send_json({
@@ -97,13 +96,12 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
         return
 
     try:
-        # создаём запись матча (задачу будем проставлять каждый раунд)
         match_session.match_model = PvpMatch(
             p1_user_id=match_session.p1_session.user_id,
             p2_user_id=match_session.p2_session.user_id,
             p1_rating_start=match_session.p1_session.rating,
             p2_rating_start=match_session.p2_session.rating,
-            task_id="",  # будет обновлён на каждом раунде
+            task_id="", 
             state=PvpMatchState.active,
             started_at=datetime.utcnow(),
             p1=schemas.PvpSideState(user_id=match_session.p1_session.user_id),
@@ -111,37 +109,42 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
         )
         await match_session.match_model.save()
 
-        # сброс счёта
         match_session.p1_score = 0
         match_session.p2_score = 0
 
-        answer_timeout = 300  # секунд
+        answer_timeout = 300 
+
+        published_count = await Task.find(Task.is_published == True).count()
+        if published_count < 3:
+            await match_session.broadcast({"type": "error", 
+                                           "message": "Not enough tasks in database (minimum 3)"})
+            await match_session.finish_match("canceled")
+            return
+        if published_count < match_session.rounds_total:
+            await match_session.broadcast({"type": "error", 
+                                           "message": "Not enough tasks for this match (increase task pool)"})
+            await match_session.finish_match("canceled")
+            return
+
+        available_tasks = await Task.find(Task.is_published == True).to_list()
+        selected_tasks = random.sample(available_tasks, match_session.rounds_total)
 
         for round_num in range(1, match_session.rounds_total + 1):
             match_session.current_round = round_num
 
-            # берём любую опубликованную задачу
-            task = await Task.find_one(Task.is_published == True)
-            if not task:
-                await match_session.broadcast({"type": "error", "message": "No tasks available"})
-                await match_session.finish_match("canceled")
-                return
-
+            task = selected_tasks[round_num - 1]
             match_session.task = task
             match_session.match_model.task_id = str(task.id)
             await match_session.match_model.save()
 
-            # сброс ответов
             match_session.p1_session.answer = None
             match_session.p1_session.counted_submission_id = None
             match_session.p2_session.answer = None
             match_session.p2_session.counted_submission_id = None
 
-            # отправляем задачу
             await match_session.send_task()
             start_time = datetime.utcnow()
 
-            # ждём ответы до тайм-аута
             while (datetime.utcnow() - start_time).total_seconds() < answer_timeout:
                 if match_session.p1_session.answer and match_session.p2_session.answer:
                     break
@@ -176,7 +179,6 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
                     print(f"Error receiving answer: {e}")
                     break
 
-            # проверяем корректность и обновляем счёт
             p1_ans = match_session.p1_session.answer
             p2_ans = match_session.p2_session.answer
             p1_correct = (p1_ans is not None and task.answer is not None and p1_ans == task.answer)
@@ -189,7 +191,6 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
 
             await asyncio.sleep(0.2)
 
-        # финальный исход по очкам
         if match_session.p1_score > match_session.p2_score:
             outcome = "p1_win"
         elif match_session.p2_score > match_session.p1_score:
