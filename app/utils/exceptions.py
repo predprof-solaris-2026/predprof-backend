@@ -32,7 +32,7 @@ class Error(Exception):
     )
     TASK_NOT_FOUND = HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
-        detail="Task not found"
+        detail="Task or tasks not found"
     )
     NOT_ADMIN = HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

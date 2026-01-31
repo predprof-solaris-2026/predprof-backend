@@ -1,4 +1,7 @@
+import csv
+import io
 import json
+from bson import ObjectId
 from fastapi import APIRouter, Depends, Response, UploadFile
 from pydantic import BaseModel
 from typing import Dict, Any
@@ -56,7 +59,7 @@ async def post_tasks(data: TaskSchemaRequest, check_admin: Admin = Depends(get_c
 
 @router.post(
     '/upload/import/json',
-    description="import files from json",
+    description="import tasks from json",
     responses={
         403: {"description": "Forbidden - You are not admin"}
     }
@@ -97,7 +100,136 @@ async def post_tasks(file: UploadFile, check_admin: Admin = Depends(get_current_
         
     except Exception as e:
         raise Error.FILE_READ_ERROR
+
+
+
+
+@router.post(
+    '/upload/import/csv',
+    description='import tasks from csv',
+    responses={
+        403: {"description": "Forbidden - You are not admin"}
+    }
+)
+async def import_tasks(file: UploadFile, check_admin: Admin = Depends(get_current_admin)):
+    
+    try:
+    
         
+        content = await file.read()
+        
+        if content.startswith(b'\xef\xbb\xbf'):
+            text = content.decode('utf-8-sig')
+        else:
+            text = content.decode('utf-8')
+        
+        
+        first_line = text.split('\n')[0] if '\n' in text else text
+        
+        
+        comma_count = first_line.count(',')
+        semicolon_count = first_line.count(';')
+        
+        if semicolon_count > comma_count:
+            delimiter = ';'
+        elif comma_count > semicolon_count:
+            delimiter = ','
+        else:
+            delimiter = ','  
+
+        csv_file = io.StringIO(text)
+        
+        try:
+            reader = csv.DictReader(csv_file, delimiter=delimiter)
+        except csv.Error as e:
+            raise Error.FILE_READ_ERROR
+        
+        results = {
+            "created": 0,
+            "updated": 0,
+            "errors": []
+        }
+        
+        for i, row in enumerate(reader, start=1):
+
+
+            try:
+                task_id = row.get('id', '').strip()
+                
+                task_data = {
+                    "subject": row.get('subject', '').strip(),
+                    "theme": row.get('theme', '').strip().lower(),
+                    "title": row.get('title', '').strip(),
+                    "task_text": row.get('task_text', '').strip(),
+                    "hint": row.get('hint', '').strip(),
+                    "answer": row.get('answer', '').strip(),
+                }
+
+                diff = row.get("difficulty", "лёгкий").strip().lower()
+                if diff in ["лёгкий", "легкий", "easy"]:
+                    task_data["difficulty"] = "лёгкий"
+                elif diff in ["средний", "медиум", "medium"]:
+                    task_data["difficulty"] = "средний"
+                elif diff in ["hard", "тяжелый", "сложный"]:
+                    task_data["difficulty"] = "сложный" 
+
+                
+                is_pub_str = row.get("is_published", "True").strip().lower()
+                if is_pub_str in ["true", "yes", "да"]:
+                    task_data["is_published"] = True
+                elif is_pub_str in ["false", "no", "нет"]:
+                    task_data["is_published"] = False
+                else:
+                    task_data["is_published"] = True  
+                
+                if task_id:
+
+                    try:
+
+                        object_id = ObjectId(task_id)
+
+                        existing = await Task.find_one({"_id": object_id})
+                        
+                        if existing:
+                            existing.subject = task_data["subject"]
+                            existing.theme = task_data["theme"]
+                            existing.difficulty = task_data["difficulty"]
+                            existing.title = task_data["title"]
+                            existing.task_text = task_data["task_text"]
+                            existing.hint = task_data["hint"]
+                            existing.answer = task_data["answer"]
+                            existing.is_published = task_data["is_published"]
+    
+                            await existing.save()
+                            results["updated"] += 1
+                        else:
+
+                            task = Task(
+                                id=object_id,
+                                **task_data
+                            )
+                            await task.insert()
+                            results["created"] += 1
+                            
+                    except Exception as e:
+                        results["errors"].append(f"Строка {i}: Ошибка '{str(e)}'")
+                        
+                else:
+                    task = Task(**task_data)
+                    await task.insert()
+                    results["created"] += 1
+                            
+            except Exception as e:
+                    results["errors"].append(f"Строка {i}: {str(e)}")
+            
+    except Exception as e:
+        raise Error.FILE_READ_ERROR
+
+
+    return {
+        **results
+    }
+       
 
 @router.post(
         
@@ -199,7 +331,7 @@ async def get_definite_task(task_id: str):
 
 @router.get(
     '/export',
-    description='export files into json',
+    description='export tasks into json',
     responses={
         403: {"description": "Forbidden - You are not admin"}
     }
@@ -217,6 +349,50 @@ async def get_tasks_to_json(check_admin: Admin = Depends(get_current_admin)):
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=users.json"}
     )
+
+
+@router.get(
+    '/export/csv',
+    description='export tasks into csv',
+    responses={
+        403: {"description": "Forbidden - You are not admin"}
+    }
+)
+async def get_tasks_to_csv(check_admin: Admin = Depends(get_current_admin)):
+
+    task_data = await Task.find_all().to_list() 
+    if not task_data:
+        raise Error.TASK_NOT_FOUND
+    
+    output = io.StringIO()
+
+    writer = csv.writer(output, delimiter=';', lineterminator='\n')
+
+    writer.writerow(["id", "subject", "theme", "difficulty", "title", "task_text", "hint", "answer", "is_published"])
+
+    for task in task_data:
+        writer.writerow([
+            str(task.id),
+            task.subject,
+            task.theme,
+            task.difficulty,
+            task.title,
+            task.task_text,
+            task.hint,
+            task.answer,
+            task.is_published
+            ])
+
+    return Response(
+        content=output.getvalue().encode('utf-8-sig'), 
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=tasks.csv",
+            "Content-Type": "text/csv; charset=utf-8-sig"
+        }
+    )
+
+
 
 
 @router.delete(
