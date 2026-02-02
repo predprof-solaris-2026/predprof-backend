@@ -74,6 +74,8 @@ async def websocket_pvp_match(websocket: WebSocket):
             await handle_active_match(match_session, user_id)
         else:
             await handle_queued_player(user_id, websocket, user.elo_rating)
+            
+        await websocket.close(code=1011)
     except WebSocketDisconnect as e:
         if user_id:
             await pvp_manager.remove_player(user_id)
@@ -173,7 +175,7 @@ async def run_game_cycle(match_session):
                 "correct_answer": correct_ans
             })
 
-            await asyncio.sleep(2.0) 
+            # await asyncio.sleep(2.0) 
 
         if match_session.p1_score > match_session.p2_score:
             outcome = "p1_win"
@@ -183,7 +185,7 @@ async def run_game_cycle(match_session):
             outcome = "draw"
 
         await match_session.finish_match(outcome)
-        await asyncio.sleep(0.2)
+        # await asyncio.sleep(0.2)
 
     except Exception as e:
         await match_session.finish_match("technical_error")
@@ -211,7 +213,11 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
 
     try:
         while True:
-            msg = await current_websocket.receive_json()
+            # msg = await current_websocket.receive_json()
+            try:
+                msg = await asyncio.wait_for(current_websocket.receive_json(), timeout=2.0)
+            except asyncio.TimeoutError:
+                continue
 
             if msg.get("type") == "answer":
                 submission_id = msg.get("submission_id", str(uuid.uuid4()))
@@ -235,6 +241,8 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
         pass
     except Exception as e:
         await match_session.finish_match("technical_error")
+    finally:
+        await current_websocket.close(code=1000)
 
 
 @router.get("/queue-status")

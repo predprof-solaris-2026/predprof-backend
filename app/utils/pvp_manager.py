@@ -1,6 +1,3 @@
-"""
-Matchmaking and connection management for PvP WebSocket.
-"""
 import asyncio
 from typing import Dict, Optional
 from datetime import datetime
@@ -181,7 +178,7 @@ class MatchSession:
 
     async def finish_match(self, outcome: str) -> Optional[dict]:
         try:
-            if self.match_model and self.match_model.state != PvpMatchState.active:
+            if self.match_model and self.match_model.state in [PvpMatchState.finished, PvpMatchState.canceled, PvpMatchState.technical_error]:
                 return None
 
             allowed = {"p1_win", "p2_win", "draw", "canceled", "technical_error"}
@@ -256,7 +253,10 @@ class MatchSession:
                     "delta": p2_delta if self.p2_session else 0,
                 }
             }
+            
             await self.broadcast(result)
+            
+            await pvp_manager.remove_match(self.match_id)
             return result
         except Exception as e:
             return None
