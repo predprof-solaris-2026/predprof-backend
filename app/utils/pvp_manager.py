@@ -38,6 +38,8 @@ class MatchSession:
     ANSWER_CHANGE_ALLOWED = True
 
     def __init__(self, match_id: str, p1_session: PlayerSession, p2_session: Optional[PlayerSession] = None):
+        self.game_task = None
+        
         self.match_id = match_id
         self.p1_session = p1_session
         self.p2_session = p2_session
@@ -257,7 +259,6 @@ class MatchSession:
             await self.broadcast(result)
             return result
         except Exception as e:
-            print(f"Error finishing match {self.match_id}: {e}")
             return None
 
 
