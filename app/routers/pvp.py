@@ -79,6 +79,7 @@ async def websocket_pvp_match(websocket: WebSocket):
     except WebSocketDisconnect as e:
         if user_id:
             await pvp_manager.remove_player(user_id)
+        await websocket.close(code=1008)
     except Exception as e:
         try:
             await websocket.close(code=1011)
