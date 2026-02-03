@@ -11,6 +11,7 @@ from app.data.models import User, PvpMatch, UserAggregateStats, PvpMatchState
 from app.utils.security import get_current_user, get_current_admin
 from app.utils.elo import calculate_win_probability, calculate_elo_change
 
+
 router = APIRouter(prefix="/rating", tags=["Rating"])
 
 
@@ -76,10 +77,10 @@ class ProjectionResponse(BaseModel):
 
 class MatchHistoryItem(BaseModel):
     match_id: str
-    opponent_id: Optional[str]
+    opponent_id: Optional[UserPublic]
     my_rating_before: int
     my_rating_delta: int
-    outcome: Optional[str] = None
+    result: Optional[str] = None
     state: str
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
@@ -262,19 +263,46 @@ async def get_my_rating_history(
         .limit(limit)
         .to_list()
     )
+    # Собираем уникальные id оппонентов
+    opponent_ids: set[str] = set()
+    for m in matches:
+        is_p1 = (m.p1_user_id == user_id)
+        oid = m.p2_user_id if is_p1 else m.p1_user_id
+        if oid:
+            opponent_ids.add(oid)
+    # Батч-загрузка оппонентов
+    opponents_map = {}
+    if opponent_ids:
+        opp_oids = [PydanticObjectId(oid) for oid in opponent_ids]
+        opp_users = await User.find({"_id": {"$in": opp_oids}}).to_list()
+        opponents_map = {str(u.id): _user_public(u) for u in opp_users}
+    def _result_for_user(outcome_value: Optional[str], is_p1: bool) -> Optional[str]:
+        if not outcome_value:
+            return None
+        if outcome_value == "draw":
+            return "ничья"
+        if outcome_value == "p1_win":
+            return "победа" if is_p1 else "поражение"
+        if outcome_value == "p2_win":
+            return "победа" if not is_p1 else "поражение"
+        # canceled / technical_error — без преобразования в победу/поражение
+        return None
+
     items: List[MatchHistoryItem] = []
     for m in matches:
         is_p1 = (m.p1_user_id == user_id)
         opponent_id = m.p2_user_id if is_p1 else m.p1_user_id
         my_before = m.p1_rating_start if is_p1 else (m.p2_rating_start or m.p1_rating_start)
         my_delta = m.p1_rating_delta if is_p1 else m.p2_rating_delta
+        outcome_val = m.outcome.value if getattr(m, "outcome", None) else None
+        result = _result_for_user(outcome_val, is_p1)
         items.append(
             MatchHistoryItem(
                 match_id=str(m.id),
-                opponent_id=opponent_id,
+                opponent=opponents_map.get(opponent_id),
                 my_rating_before=my_before,
                 my_rating_delta=my_delta,
-                outcome=m.outcome.value if getattr(m, "outcome", None) else None,
+                result=result,
                 state=m.state.value if isinstance(m.state, PvpMatchState) else str(m.state),
                 started_at=m.started_at,
                 finished_at=m.finished_at,
