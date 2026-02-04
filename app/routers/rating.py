@@ -279,13 +279,26 @@ async def get_my_rating_history(
         if not outcome_value:
             return None
         if outcome_value == "draw":
-            return "ничья"
+            return "Ничья"
         if outcome_value == "p1_win":
-            return "победа" if is_p1 else "поражение"
+            return "Победа" if is_p1 else "Поражение"
         if outcome_value == "p2_win":
-            return "победа" if not is_p1 else "поражение"
+            return "Победа" if not is_p1 else "Поражение"
         # canceled / technical_error — без преобразования в победу/поражение
         return None
+
+    def _state_to_ru(state: Optional[PvpMatchState | str]) -> Optional[str]:
+        if state is None:
+            return None
+        val = state.value if isinstance(state, PvpMatchState) else str(state)
+        mapping = {
+            "waiting": "ожидание",
+            "active": "в процессе",
+            "finished": "завершён",
+            "canceled": "отменён",
+            "technical_error": "техническая ошибка",
+        }
+        return mapping.get(val, val)
 
     items: List[MatchHistoryItem] = []
     for m in matches:
@@ -302,7 +315,7 @@ async def get_my_rating_history(
                 my_rating_before=my_before,
                 my_rating_delta=my_delta,
                 result=result,
-                state=m.state.value if isinstance(m.state, PvpMatchState) else str(m.state),
+                state=_state_to_ru(m.state),  # ВАЖНО: теперь человекочитаемо на русском
                 started_at=m.started_at,
                 finished_at=m.finished_at,
             )
