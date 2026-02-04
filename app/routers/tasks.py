@@ -2,13 +2,14 @@ import csv
 import io
 import json
 from bson import ObjectId
-from fastapi import APIRouter, Depends, Response, UploadFile
+from fastapi import APIRouter, Depends, Response, UploadFile, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any
 from app.data.schemas import TaskSchema, CheckAnswer, TaskSchemaRequest
 from app.data.models import Task, Admin
 from app.utils.security import get_current_user, get_current_admin
 from app.utils.exceptions import Error
+from app.integrations.gigachat_client import gigachat_client
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -358,6 +359,10 @@ async def get_tasks_to_json(check_admin: Admin = Depends(get_current_admin)):
         403: {"description": "Forbidden - You are not admin"}
     }
 )
+
+
+
+
 async def get_tasks_to_csv(check_admin: Admin = Depends(get_current_admin)):
 
     task_data = await Task.find_all().to_list() 
@@ -410,3 +415,61 @@ async def delete_task(task_id:str, check_admin: Admin = Depends(get_current_admi
     await task.delete()
 
     return {"message": "Task was deleted succesfully"}
+
+
+class GenerateTaskRequest(BaseModel):
+    subject: str
+    theme: Theme
+    difficulty: Difficulty
+    temperature: float | None = 0.7
+    max_tokens: int | None = 700
+
+
+@router.post(
+    "/generate",
+    response_model=TaskSchema,
+    description="Сгенерировать одну задачу через GigaChat и сохранить в БД",
+    responses={403: {"description": "Forbidden - You are not admin"}},
+)
+async def generate_task_via_gigachat(
+    payload: GenerateTaskRequest,
+    current_user: User = Depends(get_current_user),
+) -> TaskSchema:
+    try:
+        title, task_text, hint, answer = await gigachat_client.generate_platform_task(
+            subject=payload.subject,
+            theme=payload.theme.value if hasattr(payload.theme, "value") else str(payload.theme),
+            difficulty=payload.difficulty.value if hasattr(payload.difficulty, "value") else str(payload.difficulty),
+            temperature=payload.temperature or 0.7,
+            max_tokens=payload.max_tokens or 700,
+        )
+    except httpx.HTTPStatusError as e:
+        # Пробрасываем ошибку от GigaChat как 502 для прозрачности
+        raise HTTPException(status_code=502, detail=f"GigaChat error: {e.response.text}") from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GigaChat integration failed: {e}") from e
+
+    new_task = Task(
+        subject=payload.subject,
+        theme=payload.theme,
+        difficulty=payload.difficulty,
+        title=title,
+        task_text=task_text,
+        hint=hint,
+        answer=answer,
+        is_published=True,  # по аналогии с /tasks/upload
+    )
+    await new_task.create()
+    await new_task.save()
+
+    return TaskSchema(
+        id=str(new_task.id),
+        subject=new_task.subject,
+        theme=new_task.theme,
+        difficulty=new_task.difficulty,
+        title=new_task.title,
+        task_text=new_task.task_text,
+        hint=new_task.hint,
+        answer=new_task.answer,
+        is_published=new_task.is_published,
+    )
