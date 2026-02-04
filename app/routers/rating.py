@@ -77,14 +77,13 @@ class ProjectionResponse(BaseModel):
 
 class MatchHistoryItem(BaseModel):
     match_id: str
-    opponent_id: Optional[UserPublic]
+    opponent: Optional[UserPublic] = None  # корректное поле вместо opponent_id
     my_rating_before: int
     my_rating_delta: int
-    result: Optional[str] = None
+    result: Optional[str] = None           # «победа»/«поражение»/«ничья»
     state: str
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
-
 
 class MatchHistoryResponse(BaseModel):
     items: List[MatchHistoryItem]
