@@ -292,11 +292,11 @@ async def get_my_rating_history(
             return None
         val = state.value if isinstance(state, PvpMatchState) else str(state)
         mapping = {
-            "waiting": "ожидание",
-            "active": "в процессе",
-            "finished": "завершён",
-            "canceled": "отменён",
-            "technical_error": "техническая ошибка",
+            "waiting": "Ожидание",
+            "active": "В процессе",
+            "finished": "Завершён",
+            "canceled": "Отменён",
+            "technical_error": "Техническая ошибка",
         }
         return mapping.get(val, val)
 
