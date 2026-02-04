@@ -54,12 +54,6 @@ async def post_tasks(data: TaskSchemaRequest, check_admin: Admin = Depends(get_c
     )
     
 
-
-
-
-
-
-
 @router.post(
     '/upload/import/json',
     description="import tasks from json",
@@ -115,17 +109,13 @@ async def post_tasks(file: UploadFile, check_admin: Admin = Depends(get_current_
     }
 )
 async def import_tasks(file: UploadFile, check_admin: Admin = Depends(get_current_admin)):
-    
     try:
-    
-        
         content = await file.read()
         
         if content.startswith(b'\xef\xbb\xbf'):
             text = content.decode('utf-8-sig')
         else:
             text = content.decode('utf-8')
-        
         
         first_line = text.split('\n')[0] if '\n' in text else text
         
@@ -235,14 +225,8 @@ async def import_tasks(file: UploadFile, check_admin: Admin = Depends(get_curren
        
 
 @router.post(
-        
-        
     '/{task_id}/check',
     description='Check user answer for task',
-    responses={
-              
-
-    }
 )
 async def check_task(task_id: str, payload: CheckAnswer):
     task = await Task.get(task_id)
@@ -302,13 +286,6 @@ async def get_tasks():
     return tasks_list
 
 
-
-
-
-
-
-
-
 @router.get(
     '/get/{task_id}',
     description="get definite task by id",
@@ -324,12 +301,6 @@ async def get_definite_task(task_id: str):
     if 'answer' in task_dict:
         task_dict.pop('answer')
     return task_dict
-
-
-
-
-
-
 
 
 @router.get(
