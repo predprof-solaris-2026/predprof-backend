@@ -27,6 +27,12 @@ class GigaChatClient:
     """
 
     def __init__(self) -> None:
+
+        ca_cert_path = os.getenv("GIGACHAT_CA_CERT")
+        # если путь задан — используем этот сертификат, иначе системный стор
+        self._verify: bool | str = ca_cert_path if ca_cert_path else True
+        self.request_timeout_sec = float(os.getenv("GIGACHAT_TIMEOUT", "30"))
+
         # Конфиги из окружения (не меняем ваши текущие файлы, читаем env прямо здесь)
         self.auth_url = os.getenv("GIGACHAT_AUTH_URL", "https://ngw.devices.sberbank.ru:9443/api/v2/oauth")
         self.api_base = os.getenv("GIGACHAT_API_BASE", "https://gigachat.devices.sberbank.ru/api/v1")
@@ -36,7 +42,6 @@ class GigaChatClient:
 
         # Кастомный корневой сертификат НУЦ Минцифры: путь к .crt/.pem; если не задан — используем системный стор
         ca_cert_path = os.getenv("GIGACHAT_CA_CERT")  # например: "/etc/ssl/certs/MinCifra_Root_CA.pem"
-        self._verify: bool | str = ca_cert_path if ca_cert_path else True
 
         # Таймауты
         self.request_timeout_sec = float(os.getenv("GIGACHAT_TIMEOUT", "30"))

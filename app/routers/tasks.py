@@ -1,12 +1,14 @@
 import csv
 import io
 import json
+import httpx
+
 from bson import ObjectId
 from fastapi import APIRouter, Depends, Response, UploadFile, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any
-from app.data.schemas import TaskSchema, CheckAnswer, TaskSchemaRequest
-from app.data.models import Task, Admin
+from app.data.schemas import TaskSchema, CheckAnswer, TaskSchemaRequest, Difficulty, Theme
+from app.data.models import Task, Admin, User
 from app.utils.security import get_current_user, get_current_admin
 from app.utils.exceptions import Error
 from app.integrations.gigachat_client import gigachat_client
