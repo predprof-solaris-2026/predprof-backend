@@ -8,6 +8,7 @@ ENV PYTHONUNBUFFERED=1
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+COPY russian_trusted_root_ca_pem.crt /certs/russian_trusted_root_ca_pem.crt
 
 COPY . .
 

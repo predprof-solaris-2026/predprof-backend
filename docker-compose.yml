@@ -18,6 +18,8 @@ services:
   fastapi:
     build: .
     container_name: fastapi
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
@@ -29,6 +31,7 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
       ACCESS_TOKEN_EXPIRE_MINUTES_REDIS: ${ACCESS_TOKEN_EXPIRE_MINUTES_REDIS}
       ENVIRONMENT: ${ENVIRONMENT}
+      GIGACHAT_CA_CERT: /certs/russian_trusted_root_ca_pem.crt   # <-- ДОБАВИТЬ ЭТО
     depends_on:
       - mongo
     restart: unless-stopped
