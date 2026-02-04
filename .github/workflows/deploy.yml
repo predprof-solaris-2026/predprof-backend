@@ -63,5 +63,9 @@ jobs:
               -e ACCESS_TOKEN_EXPIRE_MINUTES="${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}" \
               -e ACCESS_TOKEN_EXPIRE_MINUTES_REDIS="${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES_REDIS }}" \
               -e ENVIRONMENT="${{ secrets.ENVIRONMENT }}" \
+              -e GIGACHAT_AUTH_BASIC_KEY="${{ secrets.GIGACHAT_AUTH_BASIC_KEY }}" \
+              -e GIGACHAT_SCOPE="${{ secrets.GIGACHAT_SCOPE }}" \
+              -e GIGACHAT_MODEL="${{ secrets.GIGACHAT_MODEL }}" \
+              -e GIGACHAT_CA_CERT="${{ secrets.GIGACHAT_CA_CERT }}" \
               --restart unless-stopped \
               "$IMAGE"
