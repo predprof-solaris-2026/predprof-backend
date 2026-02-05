@@ -147,26 +147,26 @@ class UserStats(Document):
         indexes = ["user_id"]
 
 
-class AchievementDefinition(Document):
-    code: Indexed(str, unique=True)
-    title: str
-    description: Optional[str] = None
-    points: int = 0
+# class AchievementDefinition(Document):
+#     code: Indexed(str, unique=True)
+#     title: str
+#     description: Optional[str] = None
+#     points: int = 0
 
-    class Settings:
-        name = "achievement_definitions"
+#     class Settings:
+#         name = "achievement_definitions"
 
 
-class UserAchievement(Document):
-    user_id: Indexed(str)
-    achievement_code: Indexed(str)
-    unlocked_at: datetime = Field(default_factory=datetime.utcnow)
+# class UserAchievement(Document):
+#     user_id: Indexed(str)
+#     achievement_code: Indexed(str)
+#     unlocked_at: datetime = Field(default_factory=datetime.utcnow)
 
-    class Settings:
-        name = "user_achievements"
-        indexes = [
-            [("user_id", 1), ("achievement_code", 1)],
-        ]
+#     class Settings:
+#         name = "user_achievements"
+#         indexes = [
+#             [("user_id", 1), ("achievement_code", 1)],
+#         ]
 
 
 class SecretAdmin(Document):
@@ -186,8 +186,8 @@ class AdminFront(Document):
         name = "admin_front"
 
 
-class Arrow(Document):
-    ids: list[int] = Field(default_factory=list)
+# class Arrow(Document):
+#     ids: list[int] = Field(default_factory=list)
 
 class Token(BaseModel):
     access_token: str

@@ -114,7 +114,6 @@ class PersonalRecommendation(BaseModel):
     difficulty: str
     reason: str
     priority: int = Field(description="5 - самый высокий приоритет, 1 - низкий")
-    estimated_time_sec: int = 30
 
 class AdaptivePlan(BaseModel):
     user_id: str

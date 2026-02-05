@@ -97,8 +97,7 @@ def generate_recommendation(
             theme=theme,
             difficulty="лёгкий",
             reason=f"Вы ещё не пробовали задачи по теме '{theme}'. Начните с простых!",
-            priority=3,
-            estimated_time_min=45
+            priority=3
         )
     
     if is_struggling:
@@ -106,8 +105,7 @@ def generate_recommendation(
             theme=theme,
             difficulty="лёгкий",
             reason=f"Низкая точность по теме '{theme}' (менее 50%). Повторите основы на лёгких задачах.",
-            priority=5,
-            estimated_time_min=60
+            priority=5
         )
     
     easy_threshold = MASTERY_THRESHOLDS["лёгкий"]["accuracy"]
@@ -116,8 +114,7 @@ def generate_recommendation(
             theme=theme,
             difficulty="средний",
             reason=f"Вы хорошо решаете лёгкие задачи по '{theme}' ({int(current_accuracy*100)}% точность). Пора повышать сложность!",
-            priority=4,
-            estimated_time_min=50
+            priority=4
         )
     
     if current_accuracy >= 0.65:
@@ -125,8 +122,7 @@ def generate_recommendation(
             theme=theme,
             difficulty="лёгкий",
             reason=f"Продолжите решать лёгкие задачи по '{theme}' ({int(current_accuracy*100)}% точность) для лучшего закрепления.",
-            priority=2,
-            estimated_time_min=40
+            priority=2
         )
     
     return None
@@ -143,8 +139,7 @@ async def individual_plan(user_id: str) -> AdaptivePlan:
                 theme=theme,
                 difficulty="лёгкий",
                 reason=f"Начните с простых задач по теме {theme}",
-                priority=4 - idx, 
-                estimated_time_min=45
+                priority=4 - idx
             )
             recommendations.append(rec)
     else:
@@ -182,24 +177,21 @@ async def individual_plan(user_id: str) -> AdaptivePlan:
                     theme=theme,
                     difficulty="сложный",
                     reason=f"Отличная работа! Вы готовы к сложным задачам по теме {theme}.",
-                    priority=3,
-                    estimated_time_min=60
+                    priority=3
                 )
             elif theme_stats["medium"] >= medium_threshold:
                 rec = PersonalRecommendation(
                     theme=theme,
                     difficulty="средний",
                     reason=f"Хороший прогресс по теме {theme}. Переходите на более сложные задачи!",
-                    priority=2,
-                    estimated_time_min=50
+                    priority=2
                 )
             else:
                 rec = PersonalRecommendation(
                     theme=theme,
                     difficulty="лёгкий",
                     reason=f"Продолжайте закреплять знания по теме {theme} на лёгких задачах.",
-                    priority=1,
-                    estimated_time_min=30
+                    priority=1
                 )
             
             recommendations.append(rec)
@@ -211,9 +203,7 @@ async def individual_plan(user_id: str) -> AdaptivePlan:
     target_accuracy = min(overall_accuracy + 0.10, 0.95)
     target_speed = max(metrics.avg_response_time_ms - 5000, 15000)
     
-    total_time_minutes = sum(rec.estimated_time_min for rec in recommendations)
-    total_time_hours = total_time_minutes / 60
-    estimated_days = max(1, int(total_time_hours / 2)) 
+    estimated_days = max(1, len(recommendations)) 
     
     return AdaptivePlan(
         user_id=user_id,
