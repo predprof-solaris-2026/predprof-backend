@@ -63,7 +63,7 @@ class Task(Document):
     title: str
     task_text: str
     hint: Optional[str] = None
-    answer: Optional[str] = None
+    answer: str
     is_published: bool = True
 
     class Settings:
