@@ -26,10 +26,6 @@ class Error(Exception):
         status_code=status.HTTP_400_BAD_REQUEST,
         detail="Файл не прочитан"
     )
-    TITLE_EXISTS = HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail="Задание с таким названием уже существует"
-    )
     TASK_NOT_FOUND = HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Задания не найдены"

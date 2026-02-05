@@ -413,7 +413,6 @@ async def generate_task_via_gigachat(
             max_tokens=payload.max_tokens or 700,
         )
     except httpx.HTTPStatusError as e:
-        # Пробрасываем ошибку от GigaChat как 502 для прозрачности
         raise HTTPException(status_code=502, detail=f"GigaChat error: {e.response.text}") from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GigaChat integration failed: {e}") from e
@@ -426,7 +425,7 @@ async def generate_task_via_gigachat(
         task_text=task_text,
         hint=hint,
         answer=answer,
-        is_published=True,  # по аналогии с /tasks/upload
+        is_published=True,
     )
     await new_task.create()
     await new_task.save()
