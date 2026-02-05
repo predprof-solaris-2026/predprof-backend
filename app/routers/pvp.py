@@ -158,9 +158,13 @@ async def run_game_cycle(match_session):
             p2_ans = match_session.p2_session.answer
             
             correct_ans = str(task.answer).strip() if task.answer is not None else None
+            correct_ans = correct_ans.replace(',', '.') if correct_ans else None
             
-            p1_correct = (p1_ans is not None and correct_ans is not None and str(p1_ans).strip() == correct_ans)
-            p2_correct = (p2_ans is not None and correct_ans is not None and str(p2_ans).strip() == correct_ans)
+            p1_ans_normalized = str(p1_ans).strip().replace(',', '.') if p1_ans is not None else None
+            p2_ans_normalized = str(p2_ans).strip().replace(',', '.') if p2_ans is not None else None
+            
+            p1_correct = (p1_ans_normalized is not None and correct_ans is not None and p1_ans_normalized == correct_ans)
+            p2_correct = (p2_ans_normalized is not None and correct_ans is not None and p2_ans_normalized == correct_ans)
 
             if p1_correct:
                 match_session.p1_score += 1

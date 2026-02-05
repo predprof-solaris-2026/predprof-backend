@@ -92,7 +92,9 @@ async def check_answer(
     user_answer = payload.answer
     is_correct = False
     if correct_answer is not None:
-        is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
+        correct_answer_normalized = str(correct_answer).strip().lower().replace(',', '.')
+        user_answer_normalized = str(user_answer).strip().lower().replace(',', '.')
+        is_correct = user_answer_normalized == correct_answer_normalized
 
     uid = str(current_user.id)
     theme_key = str(task.theme)
