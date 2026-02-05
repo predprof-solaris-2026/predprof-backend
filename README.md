@@ -1,6 +1,6 @@
 [![Build and Deploy Backend](https://github.com/predprof-solaris-2026/predprof-backend/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/predprof-solaris-2026/predprof-backend/actions/workflows/deploy.yml)
 
-<h1 align="center">Приложение с web-интерфейсом для подготовки к олимпиадам.</a> 
+<h1 align="center">Серверная часть приложения для подготовки к олимпиадам.</a> 
 <h3 align="center">Предоставляет
 различные уровни доступа для пользователей и администраторов,
 предоставляет банк заданий, тренировки, пвп, индивидуальны рекомендации, просмотр личного и общего рейтинга, а
@@ -70,4 +70,5 @@
     ```
 
     [Репозиторий фронтенда](https://github.com/predprof-solaris-2026/predprof-frontend)
+
 
