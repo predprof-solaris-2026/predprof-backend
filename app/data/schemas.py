@@ -53,6 +53,7 @@ class MatchSessionConfig(BaseModel):
 class ThemeStat(BaseModel):
     attempts: int = 0
     correct: int = 0
+    incorrect: int = 0
     avg_time_ms: Optional[float] = None
 
 class UserSchema(BaseModel):
@@ -84,7 +85,6 @@ class Token(BaseModel):
     token_type: str
 
 class TaskSchema(BaseModel):
-    # subject: Indexed(str)
     id: str
     subject: str
     theme: Theme 
@@ -108,3 +108,55 @@ class TaskSchemaRequest(BaseModel):
 class CheckAnswer(BaseModel):
     answer: str
     elapsed_ms: Optional[int] = None
+
+class PersonalRecommendation(BaseModel):
+    theme: str
+    difficulty: str
+    reason: str
+    priority: int = Field(description="5 - самый высокий приоритет, 1 - низкий")
+    estimated_time_sec: int = 30
+
+class AdaptivePlan(BaseModel):
+    user_id: str
+    recommendations: List[PersonalRecommendation]
+    target_accuracy: float
+    target_speed_ms: int
+    estimated_completion_days: int
+
+
+class UserPerformanceMetrics(BaseModel):
+    total_attempts: int
+    accuracy_rate: float
+    avg_response_time_ms: float
+    topics_mastered: List[str]
+    topics_struggling: List[str]
+    topics_not_attempted: List[str]
+
+class HintResponse(BaseModel):
+    hint: Optional[str]
+
+
+class CheckResponse(BaseModel):
+    correct: bool
+
+
+class PlanResponse(BaseModel):
+    recommendations: List[PersonalRecommendation]
+
+
+class TaskRecommendation(BaseModel):
+    id: str
+    theme: Optional[str] = None
+    difficulty: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class DifficultyRecommendation(BaseModel):
+    difficulty: str
+    recommendation: str
+
+
+class ThemeResponse(BaseModel):
+    theme: str
+    recommendations: List[DifficultyRecommendation]
+    

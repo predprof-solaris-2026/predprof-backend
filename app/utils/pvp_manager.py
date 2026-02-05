@@ -14,6 +14,7 @@ from app.data.models import (
     PvpMatchState,
     PvpOutcome,
     UserAggregateStats,
+    UserStats,
 )
 from app.data import schemas
 from app.utils.elo import update_ratings_after_match
@@ -236,6 +237,31 @@ class MatchSession:
                 await self._update_pvp_aggregate(self.p1_session.user_id, p1_res)
                 if self.p2_session:
                     await self._update_pvp_aggregate(self.p2_session.user_id, p2_res)
+                
+                p1_stats = await UserStats.find_one({"user_id": self.p1_session.user_id})
+                if not p1_stats:
+                    p1_stats = UserStats(user_id=self.p1_session.user_id)
+                p1_stats.pvp_matches = (p1_stats.pvp_matches or 0) + 1
+                if p1_res == "win":
+                    p1_stats.pvp_wins = (p1_stats.pvp_wins or 0) + 1
+                elif p1_res == "loss":
+                    p1_stats.pvp_losses = (p1_stats.pvp_losses or 0) + 1
+                else:
+                    p1_stats.pvp_draws = (p1_stats.pvp_draws or 0) + 1
+                await p1_stats.save()
+                
+                if self.p2_session:
+                    p2_stats = await UserStats.find_one({"user_id": self.p2_session.user_id})
+                    if not p2_stats:
+                        p2_stats = UserStats(user_id=self.p2_session.user_id)
+                    p2_stats.pvp_matches = (p2_stats.pvp_matches or 0) + 1
+                    if p2_res == "win":
+                        p2_stats.pvp_wins = (p2_stats.pvp_wins or 0) + 1
+                    elif p2_res == "loss":
+                        p2_stats.pvp_losses = (p2_stats.pvp_losses or 0) + 1
+                    else:
+                        p2_stats.pvp_draws = (p2_stats.pvp_draws or 0) + 1
+                    await p2_stats.save()
 
             result = {
                 "type": "match_result",

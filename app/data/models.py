@@ -8,9 +8,8 @@ from app.data import schemas
 from app.data.schemas import Theme, Difficulty
 
 
-# ---------- Aggregates (new) ----------
 class PvpCounters(BaseModel):
-    matches: int = 0       # завершённые матчи (без canceled/technical_error)
+    matches: int = 0 
     wins: int = 0
     losses: int = 0
     draws: int = 0
@@ -34,7 +33,6 @@ class UserAggregateStats(Document):
         indexes = ["user_id"]
 
 
-# ---------- Users / Auth ----------
 class User(Document):
     first_name: str
     last_name: str
@@ -58,7 +56,6 @@ class Admin(Document):
         name = "admins"
 
 
-# ---------- Tasks / Catalog ----------
 class Task(Document):
     subject: str
     theme: Theme
@@ -77,7 +74,6 @@ class Task(Document):
         ]
 
 
-# ---------- Training ----------
 class TrainingSession(Document):
     user_id: Indexed(str)
     theme: Theme
@@ -91,7 +87,6 @@ class TrainingSession(Document):
         indexes = ["user_id", "started_at"]
 
 
-# ---------- PvP (1v1) ----------
 class PvpMatchState(str, Enum):
     waiting = "waiting"
     active = "active"
@@ -109,7 +104,6 @@ class PvpOutcome(str, Enum):
 
 
 class PvpMatch(Document):
-    # matchmaking "by level": store rating at start (snapshot)
     p1_user_id: Indexed(str)
     p2_user_id: Optional[Indexed(str)] = None
     p1_rating_start: int
@@ -121,7 +115,6 @@ class PvpMatch(Document):
     finished_at: Optional[datetime] = None
     p1: schemas.PvpSideState
     p2: Optional[schemas.PvpSideState] = None
-    # Elo deltas (persisted so you can audit and avoid recomputation)
     p1_rating_delta: int = 0
     p2_rating_delta: int = 0
 
@@ -140,8 +133,13 @@ class UserStats(Document):
     user_id: Indexed(str, unique=True)
     attempts: int = 0
     correct: int = 0
+    incorrect: int = 0
     avg_time_ms: Optional[float] = None
-    # statistics by themes
+    hints_used: int = 0
+    pvp_matches: int = 0
+    pvp_wins: int = 0
+    pvp_losses: int = 0
+    pvp_draws: int = 0
     by_theme: Dict[str, schemas.ThemeStat] = Field(default_factory=dict)
 
     class Settings:
@@ -149,7 +147,6 @@ class UserStats(Document):
         indexes = ["user_id"]
 
 
-# ---------- Optional: Gamification ----------
 class AchievementDefinition(Document):
     code: Indexed(str, unique=True)
     title: str
@@ -192,8 +189,6 @@ class AdminFront(Document):
 class Arrow(Document):
     ids: list[int] = Field(default_factory=list)
 
-
-# ---------- Tokens ----------
 class Token(BaseModel):
     access_token: str
     token_type: str

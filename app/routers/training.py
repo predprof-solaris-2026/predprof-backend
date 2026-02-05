@@ -4,9 +4,14 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.data.models import Task, User, UserStats, UserAggregateStats
-from app.data.schemas import TaskSchema, CheckAnswer, Theme, Difficulty, ThemeStat
+from app.data.schemas import TaskSchema, CheckAnswer, Theme, Difficulty, ThemeStat, PersonalRecommendation, AdaptivePlan, HintResponse, CheckResponse, PlanResponse, TaskRecommendation, ThemeResponse
 from app.utils.security import get_current_user
 from app.utils.exceptions import Error
+from app.utils.adaptive_learning import (
+    individual_plan,
+    recommended_task,
+    theme_difficulty
+)
 
 router = APIRouter(prefix="/training", tags=["Training"])
 
@@ -46,7 +51,7 @@ async def get_tasks(
     ]
 
 
-@router.get('/task/{task_id}/hint')
+@router.get('/task/{task_id}/hint', response_model=HintResponse)
 async def get_task_hint(
     task_id: str,
     current_user: User = Depends(get_current_user)
@@ -59,12 +64,18 @@ async def get_task_hint(
     if not task or not task.is_published:
         raise Error.TASK_NOT_FOUND
     
-    return {
-        "hint": task.hint
-    }
+    uid = str(current_user.id)
+    user_stats = await UserStats.find_one({"user_id": uid})
+    if not user_stats:
+        user_stats = UserStats(user_id=uid)
+    
+    user_stats.hints_used = (user_stats.hints_used or 0) + 1
+    await user_stats.save()
+    
+    return HintResponse(hint=task.hint)
 
 
-@router.post('/task/{task_id}/check')
+@router.post('/task/{task_id}/check', response_model=CheckResponse)
 async def check_answer(
     task_id: str,
     payload: CheckAnswer,
@@ -84,7 +95,7 @@ async def check_answer(
         is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
 
     uid = str(current_user.id)
-    theme_key = task.theme
+    theme_key = str(task.theme)
 
     user_stats = await UserStats.find_one({"user_id": uid})
     if not user_stats:
@@ -93,11 +104,15 @@ async def check_answer(
     user_stats.attempts += 1
     if is_correct:
         user_stats.correct += 1
+    else:
+        user_stats.incorrect += 1
 
     tstat = user_stats.by_theme.get(theme_key, ThemeStat())
     tstat.attempts += 1
     if is_correct:
         tstat.correct += 1
+    else:
+        tstat.incorrect += 1
 
     if payload.elapsed_ms is not None:
         prev_avg = user_stats.avg_time_ms or 0.0
@@ -135,4 +150,62 @@ async def check_answer(
     agg.updated_at = datetime.utcnow()
     await agg.save()
 
-    return {"correct": is_correct}
+    return CheckResponse(correct=is_correct)
+
+
+@router.get('/plan', response_model=PlanResponse)
+async def get_adaptive_plan(current_user: User = Depends(get_current_user)):
+    user_id = str(current_user.id)
+    plan = await individual_plan(user_id)
+    if not plan:
+        return PlanResponse(recommendations=[])
+    return PlanResponse(recommendations=plan.recommendations)
+
+
+@router.get('/recommended-task', response_model=Optional[TaskRecommendation])
+async def get_next_task_recommendation(current_user: User = Depends(get_current_user)):
+    user_id = str(current_user.id)
+    task_rec = await recommended_task(user_id)
+    
+    if not task_rec:
+        return TaskRecommendation(
+            id=None,
+            theme=None,
+            difficulty=None,
+            reason="Чтобы получить рекомендации решите пару задач в тренировочном режиме"
+        )
+    
+    return TaskRecommendation(**task_rec)
+
+
+@router.get('/theme/{theme}', response_model=ThemeResponse)
+async def get_theme_analysis(
+    theme: Theme,
+    current_user: User = Depends(get_current_user)
+):
+    user_id = str(current_user.id)
+    
+    difficulty_stats = await theme_difficulty(user_id, theme.value)
+    
+    recommendations = [
+        {
+            "difficulty": "лёгкий",
+            "recommendation": "Хороший уровень для начала" if difficulty_stats["easy"] >= 0.70 else "Нужна практика"
+        },
+        {
+            "difficulty": "средний",
+            "recommendation": "Переходите сюда, когда будете уверены в лёгких задачах" if difficulty_stats["easy"] >= 0.85 else "Подождите, сначала укрепите основы"
+        },
+        {
+            "difficulty": "сложный",
+            "recommendation": "Готовьтесь к экзамену" if difficulty_stats["hard"] >= 0.70 else "Подождите, сначала укрепите основы"
+        }
+    ]
+    
+    return ThemeResponse(theme=str(theme.value), recommendations=[
+        {
+            "difficulty": rec["difficulty"],
+            "recommendation": rec["recommendation"]
+        }
+        for rec in recommendations
+    ])

@@ -332,10 +332,6 @@ async def get_tasks_to_json(check_admin: Admin = Depends(get_current_admin)):
         403: {"description": "Forbidden - You are not admin"}
     }
 )
-
-
-
-
 async def get_tasks_to_csv(check_admin: Admin = Depends(get_current_admin)):
 
     task_data = await Task.find_all().to_list() 
