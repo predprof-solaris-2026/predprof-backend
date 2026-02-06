@@ -236,7 +236,7 @@ async def check_task(task_id: str, payload: CheckAnswer):
     user_answer = payload.answer
     is_correct = False
     if correct_answer is not None:
-        is_correct = str(user_answer).strip().lower() == str(correct_answer).strip().lower()
+        is_correct = str(user_answer).strip().lower().replace(",", ".") == str(correct_answer).strip().lower().replace(",", ".")
 
     return {
         "correct": is_correct,

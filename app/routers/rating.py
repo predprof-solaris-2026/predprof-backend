@@ -77,10 +77,10 @@ class ProjectionResponse(BaseModel):
 
 class MatchHistoryItem(BaseModel):
     match_id: str
-    opponent: Optional[UserPublic] = None  # корректное поле вместо opponent_id
+    opponent: Optional[UserPublic] = None
     my_rating_before: int
     my_rating_delta: int
-    result: Optional[str] = None           # «победа»/«поражение»/«ничья»
+    result: Optional[str] = None
     state: str
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
@@ -262,14 +262,12 @@ async def get_my_rating_history(
         .limit(limit)
         .to_list()
     )
-    # Собираем уникальные id оппонентов
     opponent_ids: set[str] = set()
     for m in matches:
         is_p1 = (m.p1_user_id == user_id)
         oid = m.p2_user_id if is_p1 else m.p1_user_id
         if oid:
             opponent_ids.add(oid)
-    # Батч-загрузка оппонентов
     opponents_map = {}
     if opponent_ids:
         opp_oids = [PydanticObjectId(oid) for oid in opponent_ids]
@@ -284,7 +282,6 @@ async def get_my_rating_history(
             return "Победа" if is_p1 else "Поражение"
         if outcome_value == "p2_win":
             return "Победа" if not is_p1 else "Поражение"
-        # canceled / technical_error — без преобразования в победу/поражение
         return None
 
     def _state_to_ru(state: Optional[PvpMatchState | str]) -> Optional[str]:
@@ -315,7 +312,7 @@ async def get_my_rating_history(
                 my_rating_before=my_before,
                 my_rating_delta=my_delta,
                 result=result,
-                state=_state_to_ru(m.state),  # ВАЖНО: теперь человекочитаемо на русском
+                state=_state_to_ru(m.state),
                 started_at=m.started_at,
                 finished_at=m.finished_at,
             )

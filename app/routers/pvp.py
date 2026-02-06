@@ -180,8 +180,6 @@ async def run_game_cycle(match_session):
                 "correct_answer": correct_ans
             })
 
-            # await asyncio.sleep(2.0) 
-
         if match_session.p1_score > match_session.p2_score:
             outcome = "p1_win"
         elif match_session.p2_score > match_session.p1_score:
@@ -190,7 +188,6 @@ async def run_game_cycle(match_session):
             outcome = "draw"
 
         await match_session.finish_match(outcome)
-        # await asyncio.sleep(0.2)
 
     except Exception as e:
         await match_session.finish_match("technical_error")
@@ -218,7 +215,6 @@ async def handle_active_match(match_session: MatchSession, current_user_id: str)
 
     try:
         while True:
-            # msg = await current_websocket.receive_json()
             try:
                 msg = await asyncio.wait_for(current_websocket.receive_json(), timeout=2.0)
             except asyncio.TimeoutError:

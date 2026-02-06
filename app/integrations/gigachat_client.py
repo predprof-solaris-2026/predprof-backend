@@ -1,4 +1,3 @@
-# app/integrations/gigachat_client.py
 from __future__ import annotations
 
 import os
@@ -29,26 +28,21 @@ class GigaChatClient:
     def __init__(self) -> None:
 
         ca_cert_path = os.getenv("GIGACHAT_CA_CERT")
-        # если путь задан — используем этот сертификат, иначе системный стор
         self._verify: bool | str = ca_cert_path if ca_cert_path else True
         self.request_timeout_sec = float(os.getenv("GIGACHAT_TIMEOUT", "30"))
 
-        # Конфиги из окружения (не меняем ваши текущие файлы, читаем env прямо здесь)
         self.auth_url = os.getenv("GIGACHAT_AUTH_URL", "https://ngw.devices.sberbank.ru:9443/api/v2/oauth")
         self.api_base = os.getenv("GIGACHAT_API_BASE", "https://gigachat.devices.sberbank.ru/api/v1")
-        self.basic_key = os.getenv("GIGACHAT_AUTH_BASIC_KEY")  # Authorization key (Basic)
+        self.basic_key = os.getenv("GIGACHAT_AUTH_BASIC_KEY")
         self.scope = os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
         self.model = os.getenv("GIGACHAT_MODEL", "GigaChat-2-Pro")
 
-        # Кастомный корневой сертификат НУЦ Минцифры: путь к .crt/.pem; если не задан — используем системный стор
-        ca_cert_path = os.getenv("GIGACHAT_CA_CERT")  # например: "/etc/ssl/certs/MinCifra_Root_CA.pem"
+        ca_cert_path = os.getenv("GIGACHAT_CA_CERT")
 
-        # Таймауты
         self.request_timeout_sec = float(os.getenv("GIGACHAT_TIMEOUT", "30"))
 
-        # Токен + защита
         self._access_token: Optional[str] = None
-        self._expires_at: float = 0.0  # epoch seconds
+        self._expires_at: float = 0.0
         self._lock = asyncio.Lock()
 
     async def _fetch_token(self) -> None:
@@ -72,13 +66,11 @@ class GigaChatClient:
             resp.raise_for_status()
             payload = resp.json()
 
-        # По доке приходит expires_at (unix timestamp в миллисекундах)
         access_token = payload.get("access_token")
         expires_at_ms = payload.get("expires_at")
         if not access_token or not expires_at_ms:
             raise RuntimeError(f"Некорректный ответ при получении токена: {payload}")
 
-        # Берём небольшой запас (-60 секунд), чтобы не попасть на «вот-вот истечёт»
         self._access_token = access_token
         self._expires_at = (int(expires_at_ms) / 1000.0) - 60.0
 
@@ -96,7 +88,7 @@ class GigaChatClient:
             if self._access_token and now < self._expires_at:
                 return self._access_token
             await self._fetch_token()
-            return self._access_token  # type: ignore
+            return self._access_token
 
     async def list_models(self) -> Dict[str, Any]:
         """
@@ -143,7 +135,6 @@ class GigaChatClient:
 
     @staticmethod
     def _extract_text_from_choice(payload: Dict[str, Any]) -> str:
-        # Ожидаем OpenAI-стиль: choices[0].message.content
         try:
             return payload["choices"][0]["message"]["content"]
         except Exception:
@@ -151,11 +142,9 @@ class GigaChatClient:
 
     @staticmethod
     def _try_extract_json(text: str) -> Dict[str, Any] | None:
-        # Убираем возможные ```json ... ```
         s = text.strip()
         if s.startswith("```"):
             s = s.strip("`").strip()
-            # Если первая строка была "json", уберём её
             if s.lower().startswith("json"):
                 s = s[4:].strip()
         try:
@@ -174,8 +163,8 @@ class GigaChatClient:
             "role": "system",
             "content": (
                 "Ты генератор олимпиадных задач для школьников. "
-                "Отвечай строго в формате JSON без лишнего текста, без комментариев и без маркдауна. "
-                "Схема: {\"title\": str, \"task_text\": str, \"hint\": str|null, \"answer\": str|null}. "
+                "Отвечай СТРОГО в формате JSON без лишнего текста, без комментариев и без маркдауна, отвечай ТОЛЬКО НА РУССКОМ. "
+                "Схема: {\"title\": str, \"task_text\": str, \"hint\": str, \"answer\": str}."
                 "Язык: русский."
             ),
         }
@@ -187,8 +176,8 @@ class GigaChatClient:
                 f"Сложность: {difficulty}\n\n"
                 "Сгенерируй одну задачу. "
                 "Подбери ёмкий заголовок (title), чёткое условие (task_text), "
-                "небольшую подсказку (hint) при необходимости и краткий ответ (answer). "
-                "Верни ТОЛЬКО JSON по схеме, ничего кроме JSON."
+                "небольшую подсказку (hint) и краткий четкий ответ (answer). "
+                "Верни ТОЛЬКО JSON по схеме, ничего кроме JSON. ВСЕ ЧЕТКО ПО ТРЕБОВАНИЯМ"
             ),
         }
 
@@ -200,7 +189,6 @@ class GigaChatClient:
         content = self._extract_text_from_choice(raw)
         data = self._try_extract_json(content)
 
-        # Фоллбек, если модель выдала невалидный JSON
         title = f"AI: {subject} / {theme} / {difficulty}"
         task_text: str = content
         hint: Optional[str] = None
@@ -217,5 +205,4 @@ class GigaChatClient:
         return title, task_text, hint, answer
 
 
-# Глобальный singleton-инстанс
 gigachat_client = GigaChatClient()
