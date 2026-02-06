@@ -18,13 +18,6 @@ def _get_bool_env(name: str, default: bool) -> bool:
 
 
 class GigaChatClient:
-    """
-    Клиент GigaChat с ленивым обновлением токена:
-    - Токен хранится в памяти процесса и обновляется по требованию.
-    - Обновление токена защищено asyncio.Lock (чтобы не было гонок).
-    - Поддерживается кастомный корневой сертификат через env (по требованию GigaChat).
-    """
-
     def __init__(self) -> None:
 
         ca_cert_path = os.getenv("GIGACHAT_CA_CERT")
@@ -46,10 +39,6 @@ class GigaChatClient:
         self._lock = asyncio.Lock()
 
     async def _fetch_token(self) -> None:
-        """
-        Получает токен через POST /api/v2/oauth с Basic-авторизацией.
-        Документация: https://ngw.devices.sberbank.ru:9443/api/v2/oauth
-        """
         if not self.basic_key:
             raise RuntimeError("GIGACHAT_AUTH_BASIC_KEY не задан (Authorization key для Basic).")
 
@@ -75,10 +64,6 @@ class GigaChatClient:
         self._expires_at = (int(expires_at_ms) / 1000.0) - 60.0
 
     async def _get_token(self) -> str:
-        """
-        Возвращает актуальный токен. Обновляет его по необходимости.
-        Двойная проверка + lock для защиты от гонок.
-        """
         now = time.time()
         if self._access_token and now < self._expires_at:
             return self._access_token
@@ -91,9 +76,6 @@ class GigaChatClient:
             return self._access_token
 
     async def list_models(self) -> Dict[str, Any]:
-        """
-        Тестовый вызов: GET /api/v1/models — проверка доступности API.
-        """
         token = await self._get_token()
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
         url = f"{self.api_base}/models"
@@ -106,10 +88,6 @@ class GigaChatClient:
                                max_tokens: int = 512, temperature: float = 0.7,
                                n: int = 1, stream: bool = False, repetition_penalty: float = 1.0,
                                update_interval: int = 0) -> Dict[str, Any]:
-        """
-        Вызов POST /api/v1/chat/completions (OpenAI-совместимый формат).
-        Документация: https://gigachat.devices.sberbank.ru/api/v1/chat/completions
-        """
         token = await self._get_token()
         headers = {
             "Content-Type": "application/json",
@@ -155,10 +133,7 @@ class GigaChatClient:
     async def generate_platform_task(self, subject: str, theme: str, difficulty: str,
                                      *, temperature: float = 0.7, max_tokens: int = 700
                                      ) -> Tuple[str, str, Optional[str], Optional[str]]:
-        """
-        Генерация задачи для платформы.
-        Возвращает кортеж: (title, task_text, hint, answer).
-        """
+
         sys_msg = {
             "role": "system",
             "content": (
