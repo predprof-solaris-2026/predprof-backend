@@ -200,7 +200,7 @@ async def get_theme_analysis(
         },
         {
             "difficulty": "сложный",
-            "recommendation": "Готовьтесь к экзамену" if difficulty_stats["hard"] >= 0.7 else "Подождите, сначала укрепите основы"
+            "recommendation": "Готовьтесь к экзамену" if difficulty_stats["hard"] >= 0.85 else "Подождите, сначала укрепите основы"
         }
     ]
     
