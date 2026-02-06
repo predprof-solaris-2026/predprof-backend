@@ -147,7 +147,7 @@ async def individual_plan(user_id: str) -> AdaptivePlan:
             rec = generate_recommendation(
                 theme=theme,
                 current_accuracy=0.0,
-                avg_time_ms=0.0,
+                # avg_time_ms=0.0,
                 is_struggling=False,
                 not_attempted=True
             )
