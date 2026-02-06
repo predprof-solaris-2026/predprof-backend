@@ -192,15 +192,15 @@ async def get_theme_analysis(
     recommendations = [
         {
             "difficulty": "лёгкий",
-            "recommendation": "Хороший уровень для начала" if difficulty_stats["easy"] >= 0.70 else "Нужна практика"
+            "recommendation": "Хороший уровень для начала" if difficulty_stats["easy"] >= 0.5 else "Нужна практика"
         },
         {
             "difficulty": "средний",
-            "recommendation": "Переходите сюда, когда будете уверены в лёгких задачах" if difficulty_stats["easy"] >= 0.85 else "Подождите, сначала укрепите основы"
+            "recommendation": "Переходите сюда, когда будете уверены в лёгких задачах" if difficulty_stats["easy"] >= 0.65 else "Подождите, сначала укрепите основы"
         },
         {
             "difficulty": "сложный",
-            "recommendation": "Готовьтесь к экзамену" if difficulty_stats["hard"] >= 0.70 else "Подождите, сначала укрепите основы"
+            "recommendation": "Готовьтесь к экзамену" if difficulty_stats["hard"] >= 0.7 else "Подождите, сначала укрепите основы"
         }
     ]
     

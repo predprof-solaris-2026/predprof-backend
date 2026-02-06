@@ -130,6 +130,7 @@ class UserPerformanceMetrics(BaseModel):
     topics_mastered: List[str]
     topics_struggling: List[str]
     topics_not_attempted: List[str]
+    topics_in_progress: List[str] = []
 
 class HintResponse(BaseModel):
     hint: Optional[str]

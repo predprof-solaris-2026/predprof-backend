@@ -16,6 +16,13 @@ TARGET_METRICS = {
     "сложный": {"accuracy": 0.75, "speed": 90000}, 
 }
 
+THEME_TO_KEY = {
+    "математика": "Theme.math",
+    "русский": "Theme.russian",
+    "информатика": "Theme.informatic",
+    "физика": "Theme.physics",
+}
+
 
 async def calculate_user_metrics(user_id: str) -> UserPerformanceMetrics:    
     user_stats = await UserStats.find_one({"user_id": user_id})
@@ -37,11 +44,13 @@ async def calculate_user_metrics(user_id: str) -> UserPerformanceMetrics:
     topics_mastered = []
     topics_struggling = []
     topics_not_attempted = []
+    topics_in_progress = []
     
     all_themes = ["математика", "русский", "информатика", "физика"]
     
     for theme in all_themes:
-        theme_stat = user_stats.by_theme.get(theme)
+        theme_key = THEME_TO_KEY.get(theme)
+        theme_stat = user_stats.by_theme.get(theme_key) if theme_key else None
         
         if not theme_stat or theme_stat.attempts == 0:
             topics_not_attempted.append(theme)
@@ -52,6 +61,8 @@ async def calculate_user_metrics(user_id: str) -> UserPerformanceMetrics:
                 topics_mastered.append(theme)
             elif theme_accuracy < 0.50:
                 topics_struggling.append(theme)
+            else:
+                topics_in_progress.append(theme)
     
     return UserPerformanceMetrics(
         total_attempts=total_attempts,
@@ -59,7 +70,8 @@ async def calculate_user_metrics(user_id: str) -> UserPerformanceMetrics:
         avg_response_time_ms=avg_response_time,
         topics_mastered=topics_mastered,
         topics_struggling=topics_struggling,
-        topics_not_attempted=topics_not_attempted
+        topics_not_attempted=topics_not_attempted,
+        topics_in_progress=topics_in_progress
     )
 
 
@@ -69,7 +81,8 @@ async def theme_difficulty(user_id: str, theme: str) -> Dict[str, float]:
     if not user_stats:
         return {"easy": 0.0, "medium": 0.0, "hard": 0.0}
     
-    theme_stat = user_stats.by_theme.get(theme)
+    theme_key = THEME_TO_KEY.get(theme)
+    theme_stat = user_stats.by_theme.get(theme_key) if theme_key else None
     
     if not theme_stat or theme_stat.attempts == 0:
         return {"easy": 0.0, "medium": 0.0, "hard": 0.0}
@@ -131,6 +144,8 @@ def generate_recommendation(
 async def individual_plan(user_id: str) -> AdaptivePlan:
     metrics = await calculate_user_metrics(user_id)
     recommendations = []
+    # print(user_id)
+    user_stats = await UserStats.find_one(UserStats.user_id == user_id)
     
     if metrics.total_attempts == 0:
         all_themes = ["математика", "русский", "информатика", "физика"]
@@ -144,12 +159,22 @@ async def individual_plan(user_id: str) -> AdaptivePlan:
             recommendations.append(rec)
     else:
         for theme in metrics.topics_not_attempted:
+            theme_key = THEME_TO_KEY.get(theme)
+            theme_stat = user_stats.by_theme.get(theme_key) if user_stats and theme_key else None
+            is_truly_not_attempted = not theme_stat or theme_stat.attempts == 0
+            
+            if theme_stat and theme_stat.attempts > 0:
+                current_accuracy = theme_stat.correct / theme_stat.attempts
+                is_struggling = current_accuracy < 0.50
+            else:
+                current_accuracy = 0.0
+                is_struggling = False
+            
             rec = generate_recommendation(
                 theme=theme,
-                current_accuracy=0.0,
-                # avg_time_ms=0.0,
-                is_struggling=False,
-                not_attempted=True
+                current_accuracy=current_accuracy,
+                is_struggling=is_struggling,
+                not_attempted=is_truly_not_attempted
             )
             if rec:
                 recommendations.append(rec)
@@ -159,8 +184,18 @@ async def individual_plan(user_id: str) -> AdaptivePlan:
             rec = generate_recommendation(
                 theme=theme,
                 current_accuracy=theme_stats["easy"],
-                avg_time_ms=0.0,
                 is_struggling=True,
+                not_attempted=False
+            )
+            if rec:
+                recommendations.append(rec)
+        
+        for theme in metrics.topics_in_progress:
+            theme_stats = await theme_difficulty(user_id, theme)
+            rec = generate_recommendation(
+                theme=theme,
+                current_accuracy=theme_stats["medium"],
+                is_struggling=False,
                 not_attempted=False
             )
             if rec:
@@ -197,7 +232,6 @@ async def individual_plan(user_id: str) -> AdaptivePlan:
             recommendations.append(rec)
     
     recommendations.sort(key=lambda r: r.priority, reverse=True)
-    recommendations = recommendations[:5]
     
     overall_accuracy = metrics.accuracy_rate
     target_accuracy = min(overall_accuracy + 0.10, 0.95)
