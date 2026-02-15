@@ -34,3 +34,7 @@ class Error(Exception):
         status_code=status.HTTP_403_FORBIDDEN,
         detail="У вас нет доступа к этому ресурсу"
     )
+    BLOCKED = HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Вы заблокированы"
+    )
