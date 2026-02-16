@@ -26,8 +26,6 @@ async def registration_user(request: schemas.UserSchema) -> schemas.UserLogIn:
 async def log_in_user(request: Annotated[OAuth2PasswordRequestForm, Depends()]) -> schemas.Token:
     admin = await Admin.find_one(Admin.email == request.username)
     if admin and verify_password(request.password, admin.password_hash):
-        if admin.is_blocked:
-            raise Error.BLOCKED
 
         token_expires = timedelta(minutes=60)
         token = await authenticate_user(data={"sub": request.username}, expires_delta=token_expires)
